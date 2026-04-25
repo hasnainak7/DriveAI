@@ -1,7 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'main.dart'; // To access the global supabase client
+import 'obd_service.dart'; // Import your hardware connection service
 
+// ==========================================
+// 1. THE AUTHENTICATION SCREEN
+// ==========================================
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
 
@@ -12,12 +18,11 @@ class AuthScreen extends StatefulWidget {
 class _AuthScreenState extends State<AuthScreen> {
   final _formKey = GlobalKey<FormState>();
   
-  // Controllers to read the text inputs
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _usernameController = TextEditingController();
   
-  bool _isLogin = true; // Toggles between Login and Signup
+  bool _isLogin = true; 
   bool _isLoading = false;
 
   @override
@@ -35,24 +40,24 @@ class _AuthScreenState extends State<AuthScreen> {
 
     try {
       if (_isLogin) {
-        // --- LOGIN LOGIC ---
+        // Login Logic
         await supabase.auth.signInWithPassword(
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
         );
       } else {
-        // --- SIGNUP LOGIC ---
+        // Signup Logic
         await supabase.auth.signUp(
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
-          data: {'full_name': _usernameController.text.trim()}, // Sent to our trigger
+          data: {'full_name': _usernameController.text.trim()}, 
         );
       }
       
       if (mounted) {
-        // Navigate to dashboard on success
+        // Navigate to the hardware dashboard on success
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const DashboardPlaceholder()),
+          MaterialPageRoute(builder: (context) => const DashboardScreen()),
         );
       }
     } on AuthException catch (error) {
@@ -75,7 +80,6 @@ class _AuthScreenState extends State<AuthScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      // A dark background to match your vehicle theme
       backgroundColor: const Color(0xFF121212), 
       body: SafeArea(
         child: Center(
@@ -99,7 +103,6 @@ class _AuthScreenState extends State<AuthScreen> {
                   ),
                   const SizedBox(height: 40),
                   
-                  // Username Field (Only show on Signup)
                   if (!_isLogin) ...[
                     const Text('USERNAME', style: TextStyle(color: Colors.white70)),
                     const SizedBox(height: 8),
@@ -117,7 +120,6 @@ class _AuthScreenState extends State<AuthScreen> {
                     const SizedBox(height: 20),
                   ],
 
-                  // Email Field
                   const Text('EMAIL', style: TextStyle(color: Colors.white70)),
                   const SizedBox(height: 8),
                   TextFormField(
@@ -134,7 +136,6 @@ class _AuthScreenState extends State<AuthScreen> {
                   ),
                   const SizedBox(height: 20),
 
-                  // Password Field
                   const Text('PASSWORD', style: TextStyle(color: Colors.white70)),
                   const SizedBox(height: 8),
                   TextFormField(
@@ -151,12 +152,11 @@ class _AuthScreenState extends State<AuthScreen> {
                   ),
                   const SizedBox(height: 30),
 
-                  // Submit Button
                   _isLoading
                       ? const Center(child: CircularProgressIndicator(color: Colors.cyan))
                       : ElevatedButton(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.cyan, // The blue color from your mockup
+                            backgroundColor: Colors.cyan, 
                             padding: const EdgeInsets.symmetric(vertical: 16),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                           ),
@@ -168,7 +168,6 @@ class _AuthScreenState extends State<AuthScreen> {
                         ),
                   const SizedBox(height: 20),
 
-                  // Toggle Login/Signup Link
                   TextButton(
                     onPressed: () => setState(() {
                       _isLogin = !_isLogin;
@@ -197,29 +196,135 @@ class _AuthScreenState extends State<AuthScreen> {
   }
 }
 
-// A simple placeholder for where the user goes after logging in
-class DashboardPlaceholder extends StatelessWidget {
-  const DashboardPlaceholder({super.key});
+// ==========================================
+// 2. THE HARDWARE DASHBOARD SCREEN
+// ==========================================
+class DashboardScreen extends StatefulWidget {
+  const DashboardScreen({super.key});
+
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  final OBDService _obdService = OBDService();
+  List<BluetoothDevice> _devices = [];
+  bool _isScanning = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _requestPermissions();
+  }
+
+  Future<void> _requestPermissions() async {
+    await [
+      Permission.bluetoothConnect,
+      Permission.bluetoothScan,
+      Permission.location, // Location is required for Bluetooth scanning on Android
+    ].request();
+    _getPairedDevices();
+  }
+
+  Future<void> _getPairedDevices() async {
+    setState(() => _isScanning = true);
+    try {
+      List<BluetoothDevice> devices = await FlutterBluetoothSerial.instance.getBondedDevices();
+      setState(() {
+        _devices = devices;
+      });
+    } catch (e) {
+      print("Error getting devices: $e");
+    } finally {
+      setState(() => _isScanning = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _obdService.disconnect();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFF121212),
       appBar: AppBar(
-        title: const Text('Diagnostic Dashboard'),
+        title: const Text('Live Diagnostic', style: TextStyle(color: Colors.white)),
+        backgroundColor: Colors.black,
+        iconTheme: const IconThemeData(color: Colors.white),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _getPairedDevices,
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async {
               await supabase.auth.signOut();
-              Navigator.of(context).pushReplacement(
-                MaterialPageRoute(builder: (context) => const AuthScreen()),
-              );
+              _obdService.disconnect();
+              if (mounted) {
+                Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(builder: (context) => const AuthScreen()),
+                );
+              }
             },
           )
         ],
       ),
-      body: const Center(
-        child: Text('Welcome to your car data! Hardware integration comes next.'),
+      body: Column(
+        children: [
+          const Padding(
+            padding: EdgeInsets.all(16.0),
+            child: Text(
+              "Select your ELM327 Adapter",
+              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+          ),
+          if (_isScanning) const Padding(
+            padding: EdgeInsets.all(8.0),
+            child: CircularProgressIndicator(color: Colors.cyan),
+          ),
+          Expanded(
+            child: ListView.builder(
+              itemCount: _devices.length,
+              itemBuilder: (context, index) {
+                return ListTile(
+                  leading: const Icon(Icons.bluetooth, color: Colors.cyan),
+                  title: Text(_devices[index].name ?? "Unknown Device", style: const TextStyle(color: Colors.white)),
+                  subtitle: Text(_devices[index].address, style: const TextStyle(color: Colors.white54)),
+                  trailing: ElevatedButton(
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.cyan),
+                    child: const Text("Connect", style: TextStyle(color: Colors.white)),
+                    onPressed: () async {
+                      // Show connecting indicator (optional enhancement)
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Attempting connection...')),
+                      );
+                      
+                      // Attempt connection via our service
+                      bool success = await _obdService.connectToDevice(_devices[index]);
+                      
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                        if (success) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Connected to OBD-II!'), backgroundColor: Colors.green),
+                          );
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Connection failed. Is the car on?'), backgroundColor: Colors.red),
+                          );
+                        }
+                      }
+                    },
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
