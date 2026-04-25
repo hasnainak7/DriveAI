@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
@@ -17,12 +18,12 @@ class AuthScreen extends StatefulWidget {
 
 class _AuthScreenState extends State<AuthScreen> {
   final _formKey = GlobalKey<FormState>();
-  
+
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _usernameController = TextEditingController();
-  
-  bool _isLogin = true; 
+
+  bool _isLogin = true;
   bool _isLoading = false;
 
   @override
@@ -50,10 +51,10 @@ class _AuthScreenState extends State<AuthScreen> {
         await supabase.auth.signUp(
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
-          data: {'full_name': _usernameController.text.trim()}, 
+          data: {'full_name': _usernameController.text.trim()},
         );
       }
-      
+
       if (mounted) {
         // Navigate to the hardware dashboard on success
         Navigator.of(context).pushReplacement(
@@ -69,7 +70,10 @@ class _AuthScreenState extends State<AuthScreen> {
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('An unexpected error occurred'), backgroundColor: Colors.red),
+          const SnackBar(
+            content: Text('An unexpected error occurred'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } finally {
@@ -80,7 +84,7 @@ class _AuthScreenState extends State<AuthScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF121212), 
+      backgroundColor: const Color(0xFF121212),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -102,9 +106,12 @@ class _AuthScreenState extends State<AuthScreen> {
                     ),
                   ),
                   const SizedBox(height: 40),
-                  
+
                   if (!_isLogin) ...[
-                    const Text('USERNAME', style: TextStyle(color: Colors.white70)),
+                    const Text(
+                      'USERNAME',
+                      style: TextStyle(color: Colors.white70),
+                    ),
                     const SizedBox(height: 8),
                     TextFormField(
                       controller: _usernameController,
@@ -113,9 +120,12 @@ class _AuthScreenState extends State<AuthScreen> {
                         hintText: 'Enter username',
                         filled: true,
                         fillColor: Colors.white,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                       ),
-                      validator: (value) => value!.isEmpty ? 'Please enter a username' : null,
+                      validator: (value) =>
+                          value!.isEmpty ? 'Please enter a username' : null,
                     ),
                     const SizedBox(height: 20),
                   ],
@@ -130,13 +140,20 @@ class _AuthScreenState extends State<AuthScreen> {
                       hintText: 'Enter email',
                       filled: true,
                       fillColor: Colors.white,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
-                    validator: (value) => value!.isEmpty || !value.contains('@') ? 'Enter a valid email' : null,
+                    validator: (value) => value!.isEmpty || !value.contains('@')
+                        ? 'Enter a valid email'
+                        : null,
                   ),
                   const SizedBox(height: 20),
 
-                  const Text('PASSWORD', style: TextStyle(color: Colors.white70)),
+                  const Text(
+                    'PASSWORD',
+                    style: TextStyle(color: Colors.white70),
+                  ),
                   const SizedBox(height: 8),
                   TextFormField(
                     controller: _passwordController,
@@ -146,24 +163,35 @@ class _AuthScreenState extends State<AuthScreen> {
                       hintText: 'Enter password',
                       filled: true,
                       fillColor: Colors.white,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
-                    validator: (value) => value!.length < 6 ? 'Password must be 6+ chars' : null,
+                    validator: (value) =>
+                        value!.length < 6 ? 'Password must be 6+ chars' : null,
                   ),
                   const SizedBox(height: 30),
 
                   _isLoading
-                      ? const Center(child: CircularProgressIndicator(color: Colors.cyan))
+                      ? const Center(
+                          child: CircularProgressIndicator(color: Colors.cyan),
+                        )
                       : ElevatedButton(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.cyan, 
+                            backgroundColor: Colors.cyan,
                             padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
                           ),
                           onPressed: _submitForm,
                           child: Text(
                             _isLogin ? 'LOGIN' : 'REGISTER',
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
                   const SizedBox(height: 20),
@@ -175,12 +203,17 @@ class _AuthScreenState extends State<AuthScreen> {
                     }),
                     child: RichText(
                       text: TextSpan(
-                        text: _isLogin ? "Don't have an account? " : "Already have an account? ",
+                        text: _isLogin
+                            ? "Don't have an account? "
+                            : "Already have an account? ",
                         style: const TextStyle(color: Colors.white),
                         children: [
                           TextSpan(
                             text: _isLogin ? 'Signup' : 'Login',
-                            style: const TextStyle(color: Colors.cyan, fontWeight: FontWeight.bold),
+                            style: const TextStyle(
+                              color: Colors.cyan,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ],
                       ),
@@ -210,18 +243,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final OBDService _obdService = OBDService();
   List<BluetoothDevice> _devices = [];
   bool _isScanning = false;
+  bool _isConnectedToCar = false;
+
+  // Live Data Variables
+  int _currentRpm = 0;
+  int _currentSpeed = 0;
+  Timer? _pollingTimer;
 
   @override
   void initState() {
     super.initState();
     _requestPermissions();
+
+    // Listen to the data coming from our OBD parser
+    _obdService.obdDataStream.listen((data) {
+      if (mounted) {
+        setState(() {
+          if (data['type'] == 'RPM') _currentRpm = data['value'];
+          if (data['type'] == 'SPEED') _currentSpeed = data['value'];
+        });
+      }
+    });
   }
 
   Future<void> _requestPermissions() async {
     await [
       Permission.bluetoothConnect,
       Permission.bluetoothScan,
-      Permission.location, // Location is required for Bluetooth scanning on Android
+      Permission.location,
     ].request();
     _getPairedDevices();
   }
@@ -229,7 +278,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _getPairedDevices() async {
     setState(() => _isScanning = true);
     try {
-      List<BluetoothDevice> devices = await FlutterBluetoothSerial.instance.getBondedDevices();
+      List<BluetoothDevice> devices = await FlutterBluetoothSerial.instance
+          .getBondedDevices();
       setState(() {
         _devices = devices;
       });
@@ -240,8 +290,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  // The Polling Loop: Ask for data every 1 second
+  void _startPollingData() {
+    _pollingTimer = Timer.periodic(const Duration(seconds: 1), (timer) async {
+      if (!_obdService.isConnected) {
+        timer.cancel();
+        return;
+      }
+      await _obdService.sendCommand('010C\r'); // Ask for RPM
+      await Future.delayed(
+        const Duration(milliseconds: 300),
+      ); // Wait for ELM327 to process
+      await _obdService.sendCommand('010D\r'); // Ask for Speed
+    });
+  }
+
   @override
   void dispose() {
+    _pollingTimer?.cancel();
     _obdService.disconnect();
     super.dispose();
   }
@@ -251,77 +317,176 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
       appBar: AppBar(
-        title: const Text('Live Diagnostic', style: TextStyle(color: Colors.white)),
+        title: Text(
+          _isConnectedToCar ? 'Telemetry Active' : 'Live Diagnostic',
+          style: const TextStyle(color: Colors.white),
+        ),
         backgroundColor: Colors.black,
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _getPairedDevices,
-          ),
+          if (!_isConnectedToCar)
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: _getPairedDevices,
+            ),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async {
-              await supabase.auth.signOut();
+              _pollingTimer?.cancel();
               _obdService.disconnect();
+              await supabase.auth.signOut();
               if (mounted) {
                 Navigator.of(context).pushReplacement(
                   MaterialPageRoute(builder: (context) => const AuthScreen()),
                 );
               }
             },
-          )
+          ),
         ],
       ),
-      body: Column(
-        children: [
-          const Padding(
-            padding: EdgeInsets.all(16.0),
-            child: Text(
-              "Select your ELM327 Adapter",
-              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+      // Dynamic Body: Show Live Gauges if connected, else show Scanner
+      body: _isConnectedToCar ? _buildLiveDashboard() : _buildDeviceScanner(),
+    );
+  }
+
+  // --- UI: THE DEVICE SCANNER ---
+  Widget _buildDeviceScanner() {
+    return Column(
+      children: [
+        const Padding(
+          padding: EdgeInsets.all(16.0),
+          child: Text(
+            "Select your ELM327 Adapter",
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
             ),
           ),
-          if (_isScanning) const Padding(
+        ),
+        if (_isScanning)
+          const Padding(
             padding: EdgeInsets.all(8.0),
             child: CircularProgressIndicator(color: Colors.cyan),
           ),
-          Expanded(
-            child: ListView.builder(
-              itemCount: _devices.length,
-              itemBuilder: (context, index) {
-                return ListTile(
-                  leading: const Icon(Icons.bluetooth, color: Colors.cyan),
-                  title: Text(_devices[index].name ?? "Unknown Device", style: const TextStyle(color: Colors.white)),
-                  subtitle: Text(_devices[index].address, style: const TextStyle(color: Colors.white54)),
-                  trailing: ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.cyan),
-                    child: const Text("Connect", style: TextStyle(color: Colors.white)),
-                    onPressed: () async {
-                      // Show connecting indicator (optional enhancement)
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Attempting connection...')),
-                      );
-                      
-                      // Attempt connection via our service
-                      bool success = await _obdService.connectToDevice(_devices[index]);
-                      
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                        if (success) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Connected to OBD-II!'), backgroundColor: Colors.green),
-                          );
-                        } else {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Connection failed. Is the car on?'), backgroundColor: Colors.red),
-                          );
-                        }
-                      }
-                    },
+        Expanded(
+          child: ListView.builder(
+            itemCount: _devices.length,
+            itemBuilder: (context, index) {
+              return ListTile(
+                leading: const Icon(Icons.bluetooth, color: Colors.cyan),
+                title: Text(
+                  _devices[index].name ?? "Unknown Device",
+                  style: const TextStyle(color: Colors.white),
+                ),
+                subtitle: Text(
+                  _devices[index].address,
+                  style: const TextStyle(color: Colors.white54),
+                ),
+                trailing: ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.cyan),
+                  child: const Text(
+                    "Connect",
+                    style: TextStyle(color: Colors.white),
                   ),
-                );
-              },
+                  onPressed: () async {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Attempting connection...')),
+                    );
+
+                    bool success = await _obdService.connectToDevice(
+                      _devices[index],
+                    );
+
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                      if (success) {
+                        setState(() => _isConnectedToCar = true);
+                        _startPollingData(); // START ASKING FOR DATA
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Connected to OBD-II!'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Connection failed. Is the car on?'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    }
+                  },
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  // --- UI: THE LIVE DASHBOARD ---
+  Widget _buildLiveDashboard() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.speed, size: 80, color: Colors.cyan),
+          const SizedBox(height: 20),
+          Text(
+            "$_currentRpm",
+            style: const TextStyle(
+              fontSize: 60,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          const Text(
+            "RPM",
+            style: TextStyle(
+              fontSize: 20,
+              color: Colors.white54,
+              letterSpacing: 2,
+            ),
+          ),
+          const SizedBox(height: 40),
+          Text(
+            "$_currentSpeed",
+            style: const TextStyle(
+              fontSize: 60,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
+          const Text(
+            "KM/H",
+            style: TextStyle(
+              fontSize: 20,
+              color: Colors.white54,
+              letterSpacing: 2,
+            ),
+          ),
+          const SizedBox(height: 60),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+            ),
+            onPressed: () {
+              _pollingTimer?.cancel();
+              _obdService.disconnect();
+              setState(() {
+                _isConnectedToCar = false;
+                _currentRpm = 0;
+                _currentSpeed = 0;
+              });
+            },
+            child: const Text(
+              "Disconnect",
+              style: TextStyle(color: Colors.white, fontSize: 18),
             ),
           ),
         ],
