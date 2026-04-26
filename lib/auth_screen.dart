@@ -4,11 +4,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-// Your custom file imports
-import 'main.dart'; 
-import 'obd_service.dart'; 
-import 'add_vehicle_screen.dart'; 
-import 'garage_screen.dart'; // The Sprint 6 addition
+import 'main.dart';
+import 'obd_service.dart';
+import 'add_vehicle_screen.dart';
+import 'garage_screen.dart';
 
 // ==========================================
 // 1. THE AUTHENTICATION SCREEN
@@ -22,12 +21,12 @@ class AuthScreen extends StatefulWidget {
 
 class _AuthScreenState extends State<AuthScreen> {
   final _formKey = GlobalKey<FormState>();
-  
+
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _usernameController = TextEditingController();
-  
-  bool _isLogin = true; 
+
+  bool _isLogin = true;
   bool _isLoading = false;
 
   @override
@@ -45,38 +44,36 @@ class _AuthScreenState extends State<AuthScreen> {
 
     try {
       if (_isLogin) {
-        // Login Logic
         await supabase.auth.signInWithPassword(
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
         );
       } else {
-        // Signup Logic
         await supabase.auth.signUp(
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
-          data: {'full_name': _usernameController.text.trim()}, 
+          data: {'full_name': _usernameController.text.trim()},
         );
       }
-      
+
       if (mounted) {
-        // Navigate to the hardware dashboard on success
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (context) => const DashboardScreen()),
         );
       }
     } on AuthException catch (error) {
-      if (mounted) {
+      if (mounted)
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(error.message), backgroundColor: Colors.red),
         );
-      }
     } catch (error) {
-      if (mounted) {
+      if (mounted)
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('An unexpected error occurred'), backgroundColor: Colors.red),
+          const SnackBar(
+            content: Text('An unexpected error occurred'),
+            backgroundColor: Colors.red,
+          ),
         );
-      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -85,7 +82,7 @@ class _AuthScreenState extends State<AuthScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF121212), 
+      backgroundColor: const Color(0xFF121212),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -107,9 +104,11 @@ class _AuthScreenState extends State<AuthScreen> {
                     ),
                   ),
                   const SizedBox(height: 40),
-                  
                   if (!_isLogin) ...[
-                    const Text('USERNAME', style: TextStyle(color: Colors.white70)),
+                    const Text(
+                      'USERNAME',
+                      style: TextStyle(color: Colors.white70),
+                    ),
                     const SizedBox(height: 8),
                     TextFormField(
                       controller: _usernameController,
@@ -118,13 +117,15 @@ class _AuthScreenState extends State<AuthScreen> {
                         hintText: 'Enter username',
                         filled: true,
                         fillColor: Colors.white,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                       ),
-                      validator: (value) => value!.isEmpty ? 'Please enter a username' : null,
+                      validator: (value) =>
+                          value!.isEmpty ? 'Please enter a username' : null,
                     ),
                     const SizedBox(height: 20),
                   ],
-
                   const Text('EMAIL', style: TextStyle(color: Colors.white70)),
                   const SizedBox(height: 8),
                   TextFormField(
@@ -135,13 +136,19 @@ class _AuthScreenState extends State<AuthScreen> {
                       hintText: 'Enter email',
                       filled: true,
                       fillColor: Colors.white,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
-                    validator: (value) => value!.isEmpty || !value.contains('@') ? 'Enter a valid email' : null,
+                    validator: (value) => value!.isEmpty || !value.contains('@')
+                        ? 'Enter a valid email'
+                        : null,
                   ),
                   const SizedBox(height: 20),
-
-                  const Text('PASSWORD', style: TextStyle(color: Colors.white70)),
+                  const Text(
+                    'PASSWORD',
+                    style: TextStyle(color: Colors.white70),
+                  ),
                   const SizedBox(height: 8),
                   TextFormField(
                     controller: _passwordController,
@@ -151,28 +158,37 @@ class _AuthScreenState extends State<AuthScreen> {
                       hintText: 'Enter password',
                       filled: true,
                       fillColor: Colors.white,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
-                    validator: (value) => value!.length < 6 ? 'Password must be 6+ chars' : null,
+                    validator: (value) =>
+                        value!.length < 6 ? 'Password must be 6+ chars' : null,
                   ),
                   const SizedBox(height: 30),
-
                   _isLoading
-                      ? const Center(child: CircularProgressIndicator(color: Colors.cyan))
+                      ? const Center(
+                          child: CircularProgressIndicator(color: Colors.cyan),
+                        )
                       : ElevatedButton(
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.cyan, 
+                            backgroundColor: Colors.cyan,
                             padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
                           ),
                           onPressed: _submitForm,
                           child: Text(
                             _isLogin ? 'LOGIN' : 'REGISTER',
-                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
                           ),
                         ),
                   const SizedBox(height: 20),
-
                   TextButton(
                     onPressed: () => setState(() {
                       _isLogin = !_isLogin;
@@ -180,12 +196,17 @@ class _AuthScreenState extends State<AuthScreen> {
                     }),
                     child: RichText(
                       text: TextSpan(
-                        text: _isLogin ? "Don't have an account? " : "Already have an account? ",
+                        text: _isLogin
+                            ? "Don't have an account? "
+                            : "Already have an account? ",
                         style: const TextStyle(color: Colors.white),
                         children: [
                           TextSpan(
                             text: _isLogin ? 'Signup' : 'Login',
-                            style: const TextStyle(color: Colors.cyan, fontWeight: FontWeight.bold),
+                            style: const TextStyle(
+                              color: Colors.cyan,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ],
                       ),
@@ -215,21 +236,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final OBDService _obdService = OBDService();
   List<BluetoothDevice> _devices = [];
   bool _isScanning = false;
-  bool _isConnectedToCar = false; 
+  bool _isConnectedToCar = false;
 
-  // Live Data Variables
   int _currentRpm = 0;
   int _currentSpeed = 0;
   Timer? _pollingTimer;
-
-  // The Sprint 6 Variable: Tracking which car we are diagnosing
   Map<String, dynamic>? _activeVehicle;
+
+  // ---> SPRINT 7: THE REALTIME CHANNEL <---
+  RealtimeChannel? _telemetryChannel;
 
   @override
   void initState() {
     super.initState();
     _requestPermissions();
-    
+
     // Listen to the data coming from our OBD parser (or simulator)
     _obdService.obdDataStream.listen((data) {
       if (mounted) {
@@ -237,6 +258,36 @@ class _DashboardScreenState extends State<DashboardScreen> {
           if (data['type'] == 'RPM') _currentRpm = data['value'];
           if (data['type'] == 'SPEED') _currentSpeed = data['value'];
         });
+
+        // ---> SPRINT 7: PUSH DATA TO THE CLOUD <---
+        if (_isConnectedToCar && _telemetryChannel != null) {
+          _telemetryChannel!.sendBroadcastMessage(
+            event: 'live_data',
+            payload: {
+              'vehicle_id': _activeVehicle!['id'],
+              'rpm': _currentRpm,
+              'speed': _currentSpeed,
+              'timestamp': DateTime.now().toIso8601String(),
+            },
+          );
+        }
+      }
+    });
+  }
+
+  // ---> SPRINT 7: SETUP WEBSOCKET CONNECTION <---
+  void _setupRealtimeChannel() {
+    if (_activeVehicle == null) return;
+
+    // Create a unique room for this specific car
+    final channelName = 'telemetry_${_activeVehicle!['id']}';
+    _telemetryChannel = supabase.channel(channelName);
+
+    _telemetryChannel!.subscribe((status, [error]) {
+      if (status == RealtimeSubscribeStatus.subscribed) {
+        print(
+          'Successfully connected to Supabase Realtime Channel: $channelName',
+        );
       }
     });
   }
@@ -245,7 +296,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     await [
       Permission.bluetoothConnect,
       Permission.bluetoothScan,
-      Permission.location, 
+      Permission.location,
     ].request();
     _getPairedDevices();
   }
@@ -253,10 +304,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _getPairedDevices() async {
     setState(() => _isScanning = true);
     try {
-      List<BluetoothDevice> devices = await FlutterBluetoothSerial.instance.getBondedDevices();
-      setState(() {
-        _devices = devices;
-      });
+      List<BluetoothDevice> devices = await FlutterBluetoothSerial.instance
+          .getBondedDevices();
+      setState(() => _devices = devices);
     } catch (e) {
       print("Error getting devices: $e");
     } finally {
@@ -264,7 +314,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  // The Polling Loop: Ask for data every 1 second (Only used for real Bluetooth)
   void _startPollingData() {
     _pollingTimer = Timer.periodic(const Duration(seconds: 1), (timer) async {
       if (!_obdService.isConnected) {
@@ -272,7 +321,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         return;
       }
       await _obdService.sendCommand('010C\r'); // Ask for RPM
-      await Future.delayed(const Duration(milliseconds: 300)); // Wait for ELM327 to process
+      await Future.delayed(const Duration(milliseconds: 300));
       await _obdService.sendCommand('010D\r'); // Ask for Speed
     });
   }
@@ -281,6 +330,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void dispose() {
     _pollingTimer?.cancel();
     _obdService.disconnect();
+    _telemetryChannel?.unsubscribe(); // Clean up WebSocket
     super.dispose();
   }
 
@@ -289,30 +339,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
       appBar: AppBar(
-        title: Text(_isConnectedToCar ? 'Telemetry Active' : 'Live Diagnostic', style: const TextStyle(color: Colors.white)),
+        title: Text(
+          _isConnectedToCar ? 'Telemetry Active' : 'Live Diagnostic',
+          style: const TextStyle(color: Colors.white),
+        ),
         backgroundColor: Colors.black,
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
-          // ---> THE SPRINT 6 GARAGE BUTTON <---
           IconButton(
             icon: const Icon(Icons.garage),
             onPressed: () async {
-              // Open the Garage screen and wait to see if they picked a car
               final selectedCar = await Navigator.of(context).push(
                 MaterialPageRoute(builder: (context) => const GarageScreen()),
               );
-              
               if (selectedCar != null && mounted) {
-                setState(() {
-                  _activeVehicle = selectedCar as Map<String, dynamic>;
-                });
+                setState(
+                  () => _activeVehicle = selectedCar as Map<String, dynamic>,
+                );
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Active Vehicle set to: ${_activeVehicle!['make']} ${_activeVehicle!['model']}')),
+                  SnackBar(
+                    content: Text(
+                      'Active Vehicle set to: ${_activeVehicle!['make']} ${_activeVehicle!['model']}',
+                    ),
+                  ),
                 );
               }
             },
           ),
-          
           if (!_isConnectedToCar)
             IconButton(
               icon: const Icon(Icons.refresh),
@@ -322,27 +375,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
             icon: const Icon(Icons.logout),
             onPressed: () async {
               _pollingTimer?.cancel();
+              _telemetryChannel?.unsubscribe();
               _obdService.disconnect();
               await supabase.auth.signOut();
-              if (mounted) {
+              if (mounted)
                 Navigator.of(context).pushReplacement(
                   MaterialPageRoute(builder: (context) => const AuthScreen()),
                 );
-              }
             },
-          )
+          ),
         ],
       ),
-      // Dynamic Body: Show Live Gauges if connected, else show Scanner
       body: _isConnectedToCar ? _buildLiveDashboard() : _buildDeviceScanner(),
     );
   }
 
-  // --- UI: THE DEVICE SCANNER ---
   Widget _buildDeviceScanner() {
     return Column(
       children: [
-        // ---> NEW ACTIVE VEHICLE DISPLAY (Sprint 6) <---
         Container(
           width: double.infinity,
           padding: const EdgeInsets.all(16),
@@ -350,53 +400,78 @@ class _DashboardScreenState extends State<DashboardScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("ACTIVE VEHICLE", style: TextStyle(color: Colors.cyan, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+              const Text(
+                "ACTIVE VEHICLE",
+                style: TextStyle(
+                  color: Colors.cyan,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.5,
+                ),
+              ),
               const SizedBox(height: 4),
               Text(
-                _activeVehicle != null 
-                    ? "${_activeVehicle!['year']} ${_activeVehicle!['make']} ${_activeVehicle!['model']}" 
+                _activeVehicle != null
+                    ? "${_activeVehicle!['year']} ${_activeVehicle!['make']} ${_activeVehicle!['model']}"
                     : "No vehicle selected",
-                style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               if (_activeVehicle == null)
-                const Text("Tap the Garage icon in the top right to select a car.", style: TextStyle(color: Colors.white54, fontSize: 12)),
+                const Text(
+                  "Tap the Garage icon in the top right to select a car.",
+                  style: TextStyle(color: Colors.white54, fontSize: 12),
+                ),
             ],
           ),
         ),
-        
-        // ---> SIMULATION BUTTON <---
+
         Container(
           margin: const EdgeInsets.all(16.0),
           width: double.infinity,
           child: ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.amber[700], // Yellow warning color
+              backgroundColor: Colors.amber[700],
               padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
             icon: const Icon(Icons.developer_mode, color: Colors.black),
             label: const Text(
-              "START SIMULATION MODE", 
-              style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16)
+              "START SIMULATION MODE",
+              style: TextStyle(
+                color: Colors.black,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
             ),
             onPressed: () async {
-              // Require an active vehicle before simulating
               if (_activeVehicle == null) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Please select a vehicle from the Garage first.'), backgroundColor: Colors.red),
+                  const SnackBar(
+                    content: Text(
+                      'Please select a vehicle from the Garage first.',
+                    ),
+                    backgroundColor: Colors.red,
+                  ),
                 );
                 return;
               }
-
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Starting Simulator...'), duration: Duration(seconds: 1)),
+                const SnackBar(
+                  content: Text('Starting Simulator...'),
+                  duration: Duration(seconds: 1),
+                ),
               );
-              
-              bool success = await _obdService.startSimulation(); 
-              
-              if (mounted && success) {
-                setState(() => _isConnectedToCar = true);
-              }
+
+              _setupRealtimeChannel(); // <-- Initialize WebSocket
+              bool success = await _obdService.startSimulation();
+
+              if (mounted && success) setState(() => _isConnectedToCar = true);
             },
           ),
         ),
@@ -406,50 +481,76 @@ class _DashboardScreenState extends State<DashboardScreen> {
           padding: EdgeInsets.all(16.0),
           child: Text(
             "Or Select a Real ELM327 Adapter",
-            style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
-        if (_isScanning) const Padding(
-          padding: EdgeInsets.all(8.0),
-          child: CircularProgressIndicator(color: Colors.cyan),
-        ),
+        if (_isScanning)
+          const Padding(
+            padding: EdgeInsets.all(8.0),
+            child: CircularProgressIndicator(color: Colors.cyan),
+          ),
         Expanded(
           child: ListView.builder(
             itemCount: _devices.length,
             itemBuilder: (context, index) {
               return ListTile(
                 leading: const Icon(Icons.bluetooth, color: Colors.cyan),
-                title: Text(_devices[index].name ?? "Unknown Device", style: const TextStyle(color: Colors.white)),
-                subtitle: Text(_devices[index].address, style: const TextStyle(color: Colors.white54)),
+                title: Text(
+                  _devices[index].name ?? "Unknown Device",
+                  style: const TextStyle(color: Colors.white),
+                ),
+                subtitle: Text(
+                  _devices[index].address,
+                  style: const TextStyle(color: Colors.white54),
+                ),
                 trailing: ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.cyan),
-                  child: const Text("Connect", style: TextStyle(color: Colors.white)),
+                  child: const Text(
+                    "Connect",
+                    style: TextStyle(color: Colors.white),
+                  ),
                   onPressed: () async {
-                    // Require an active vehicle before connecting to real hardware
                     if (_activeVehicle == null) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Please select a vehicle from the Garage first.'), backgroundColor: Colors.red),
+                        const SnackBar(
+                          content: Text(
+                            'Please select a vehicle from the Garage first.',
+                          ),
+                          backgroundColor: Colors.red,
+                        ),
                       );
                       return;
                     }
-
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('Attempting connection...')),
                     );
-                    
-                    bool success = await _obdService.connectToDevice(_devices[index]);
-                    
+
+                    _setupRealtimeChannel(); // <-- Initialize WebSocket
+                    bool success = await _obdService.connectToDevice(
+                      _devices[index],
+                    );
+
                     if (mounted) {
                       ScaffoldMessenger.of(context).hideCurrentSnackBar();
                       if (success) {
                         setState(() => _isConnectedToCar = true);
-                        _startPollingData(); // START ASKING FOR DATA
+                        _startPollingData();
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Connected to OBD-II!'), backgroundColor: Colors.green),
+                          const SnackBar(
+                            content: Text('Connected to OBD-II!'),
+                            backgroundColor: Colors.green,
+                          ),
                         );
                       } else {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Connection failed. Is the car on?'), backgroundColor: Colors.red),
+                          const SnackBar(
+                            content: Text('Connection failed. Is the car on?'),
+                            backgroundColor: Colors.red,
+                          ),
                         );
                       }
                     }
@@ -463,33 +564,69 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // --- UI: THE LIVE DASHBOARD ---
   Widget _buildLiveDashboard() {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
+          const Icon(
+            Icons.cloud_upload,
+            color: Colors.green,
+            size: 40,
+          ), // Indicator that we are pushing to cloud
+          const Text(
+            "BROADCASTING LIVE",
+            style: TextStyle(
+              color: Colors.green,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 2,
+            ),
+          ),
+          const SizedBox(height: 30),
           const Icon(Icons.speed, size: 80, color: Colors.cyan),
           const SizedBox(height: 20),
           Text(
-            "$_currentRpm", 
-            style: const TextStyle(fontSize: 60, fontWeight: FontWeight.bold, color: Colors.white)
+            "$_currentRpm",
+            style: const TextStyle(
+              fontSize: 60,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
           ),
-          const Text("RPM", style: TextStyle(fontSize: 20, color: Colors.white54, letterSpacing: 2)),
+          const Text(
+            "RPM",
+            style: TextStyle(
+              fontSize: 20,
+              color: Colors.white54,
+              letterSpacing: 2,
+            ),
+          ),
           const SizedBox(height: 40),
           Text(
-            "$_currentSpeed", 
-            style: const TextStyle(fontSize: 60, fontWeight: FontWeight.bold, color: Colors.white)
+            "$_currentSpeed",
+            style: const TextStyle(
+              fontSize: 60,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
           ),
-          const Text("KM/H", style: TextStyle(fontSize: 20, color: Colors.white54, letterSpacing: 2)),
+          const Text(
+            "KM/H",
+            style: TextStyle(
+              fontSize: 20,
+              color: Colors.white54,
+              letterSpacing: 2,
+            ),
+          ),
           const SizedBox(height: 60),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.redAccent, 
-              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15)
+              backgroundColor: Colors.redAccent,
+              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
             ),
             onPressed: () {
               _pollingTimer?.cancel();
+              _telemetryChannel?.unsubscribe();
               _obdService.disconnect();
               setState(() {
                 _isConnectedToCar = false;
@@ -497,8 +634,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 _currentSpeed = 0;
               });
             },
-            child: const Text("Disconnect", style: TextStyle(color: Colors.white, fontSize: 18)),
-          )
+            child: const Text(
+              "Disconnect",
+              style: TextStyle(color: Colors.white, fontSize: 18),
+            ),
+          ),
         ],
       ),
     );
