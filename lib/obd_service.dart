@@ -1,25 +1,70 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
+import 'dart:math'; // Added for the simulator
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 
 class OBDService {
   BluetoothConnection? connection;
   bool isConnected = false;
+  bool isSimulating = false; // Tracks if we are in fake mode
   
-  // A stream controller to broadcast clean data to your UI
   final StreamController<Map<String, dynamic>> _obdDataController = StreamController.broadcast();
   Stream<Map<String, dynamic>> get obdDataStream => _obdDataController.stream;
 
   String _responseBuffer = "";
+  
+  // Simulation Variables
+  Timer? _simulationTimer;
+  int _simRpm = 800; // Engine idle
+  int _simSpeed = 0;
+  bool _isAccelerating = true;
 
-  // 1. Connect to the ELM327 Device
+  // ==========================================
+  // 1. THE SIMULATOR MODE
+  // ==========================================
+  Future<bool> startSimulation() async {
+    isSimulating = true;
+    isConnected = true;
+    
+    // Fake a 1-second connection delay
+    await Future.delayed(const Duration(seconds: 1));
+    print("Simulation Mode Started");
+
+    // Push fake data every 500 milliseconds
+    _simulationTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) {
+      final random = Random();
+
+      // Fake Engine Logic
+      if (_isAccelerating) {
+        _simRpm += random.nextInt(300) + 100; // Rev up
+        if (_simRpm > 2500) _simSpeed += random.nextInt(4) + 1; // Speed increases as RPM gets high
+        if (_simRpm > 4500) _isAccelerating = false; // "Shift gears" or let off gas
+      } else {
+        _simRpm -= random.nextInt(400) + 100; // Revs drop
+        if (_simRpm < 900) {
+          _simRpm = random.nextInt(200) + 700; // Settle at idle
+          _isAccelerating = true; // Start accelerating again
+        }
+      }
+
+      // Push to the exact same stream the real Bluetooth uses!
+      _obdDataController.add({'type': 'RPM', 'value': _simRpm});
+      _obdDataController.add({'type': 'SPEED', 'value': _simSpeed});
+    });
+
+    return true;
+  }
+
+  // ==========================================
+  // 2. REAL BLUETOOTH CONNECTION
+  // ==========================================
   Future<bool> connectToDevice(BluetoothDevice device) async {
+    isSimulating = false;
     try {
       connection = await BluetoothConnection.toAddress(device.address);
       isConnected = true;
       
-      // Start listening to the car's replies immediately
       connection!.input!.listen(_onDataReceived).onDone(() {
         isConnected = false;
       });
@@ -32,9 +77,8 @@ class OBDService {
     }
   }
 
-  // 2. The Initialization
   Future<void> _initializeELM327() async {
-    if (!isConnected) return;
+    if (!isConnected || isSimulating) return;
     await sendCommand('ATZ\r');
     await Future.delayed(const Duration(seconds: 1));
     await sendCommand('ATE0\r');
@@ -43,61 +87,52 @@ class OBDService {
     await Future.delayed(const Duration(milliseconds: 500));
   }
 
-  // 3. Send Commands
   Future<void> sendCommand(String command) async {
-    if (connection != null && connection!.isConnected) {
+    // Only send real commands if we aren't simulating
+    if (!isSimulating && connection != null && connection!.isConnected) {
       connection!.output.add(ascii.encode(command));
       await connection!.output.allSent;
     }
   }
 
-  // 4. The Listener & Hex Parser (The Magic Happens Here)
   void _onDataReceived(Uint8List data) {
+    if (isSimulating) return; // Ignore real data if simulating
     String chunk = ascii.decode(data);
     _responseBuffer += chunk;
 
-    // ELM327 messages always end with a '>' prompt
     if (_responseBuffer.contains('>')) {
       _processObdResponse(_responseBuffer);
-      _responseBuffer = ""; // Clear buffer for the next message
+      _responseBuffer = "";
     }
   }
 
   void _processObdResponse(String rawData) {
-    // Clean up the string (remove spaces, newlines, and the '>' symbol)
     String cleanData = rawData.replaceAll(RegExp(r'[\r\n\s>]'), '');
-
     try {
-      // Parse Engine RPM (010C returns 410C)
       if (cleanData.contains('410C') && cleanData.length >= 8) {
         int index = cleanData.indexOf('410C');
-        String hexA = cleanData.substring(index + 4, index + 6);
-        String hexB = cleanData.substring(index + 6, index + 8);
-        int a = int.parse(hexA, radix: 16);
-        int b = int.parse(hexB, radix: 16);
-        int rpm = ((a * 256) + b) ~/ 4;
-        
-        _obdDataController.add({'type': 'RPM', 'value': rpm});
+        int a = int.parse(cleanData.substring(index + 4, index + 6), radix: 16);
+        int b = int.parse(cleanData.substring(index + 6, index + 8), radix: 16);
+        _obdDataController.add({'type': 'RPM', 'value': ((a * 256) + b) ~/ 4});
       }
-      
-      // Parse Vehicle Speed (010D returns 410D)
       if (cleanData.contains('410D') && cleanData.length >= 6) {
         int index = cleanData.indexOf('410D');
-        String hexA = cleanData.substring(index + 4, index + 6);
-        int speed = int.parse(hexA, radix: 16);
-        
-        _obdDataController.add({'type': 'SPEED', 'value': speed});
+        _obdDataController.add({'type': 'SPEED', 'value': int.parse(cleanData.substring(index + 4, index + 6), radix: 16)});
       }
     } catch (e) {
-      print("Parser error on data: $cleanData");
+      print("Parser error");
     }
   }
 
+  // ==========================================
+  // 3. DISCONNECT LOGIC
+  // ==========================================
   void disconnect() {
-    if (isConnected) {
+    _simulationTimer?.cancel(); // Stop the fake engine
+    if (connection != null && connection!.isConnected) {
       connection?.close();
-      isConnected = false;
     }
-    _obdDataController.close();
+    isConnected = false;
+    isSimulating = false;
   }
 }
