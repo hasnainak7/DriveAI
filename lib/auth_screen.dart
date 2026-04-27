@@ -8,7 +8,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'main.dart'; 
 import 'obd_service.dart'; 
 import 'garage_screen.dart'; 
-import 'dtc_screen.dart'; // <--- NEW IMPORT FOR DIAGNOSTICS
+import 'dtc_screen.dart'; 
 
 // ==========================================
 // 1. THE AUTHENTICATION SCREEN
@@ -156,9 +156,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _isScanning = false;
   bool _isConnectedToCar = false; 
 
+  // Full Sensor Array
   int _currentRpm = 0;
   int _currentSpeed = 0;
-  Timer? _pollingTimer;
+  int _engineLoad = 0;
+  int _coolantTemp = 0;
+  int _intakeTemp = 0;
+  int _throttlePos = 0;
+  
+  bool _isPollingData = false; 
   Map<String, dynamic>? _activeVehicle;
 
   RealtimeChannel? _telemetryChannel;
@@ -179,9 +185,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         setState(() {
           if (data['type'] == 'RPM') _currentRpm = data['value'];
           if (data['type'] == 'SPEED') _currentSpeed = data['value'];
+          if (data['type'] == 'LOAD') _engineLoad = data['value'];
+          if (data['type'] == 'COOLANT') _coolantTemp = data['value'];
+          if (data['type'] == 'INTAKE') _intakeTemp = data['value'];
+          if (data['type'] == 'THROTTLE') _throttlePos = data['value'];
         });
 
-        // Push data to the Supabase Cloud
+        // Push data to the Supabase Cloud (Now including all sensors!)
         if (_isConnectedToCar && _telemetryChannel != null) {
           _telemetryChannel!.sendBroadcastMessage(
             event: 'live_data',
@@ -189,6 +199,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
               'vehicle_id': _activeVehicle!['id'],
               'rpm': _currentRpm,
               'speed': _currentSpeed,
+              'load': _engineLoad,
+              'coolant': _coolantTemp,
+              'intake': _intakeTemp,
+              'throttle': _throttlePos,
               'timestamp': DateTime.now().toIso8601String(),
             },
           );
@@ -223,18 +237,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
     finally { setState(() => _isScanning = false); }
   }
 
-  void _startPollingData() {
-    _pollingTimer = Timer.periodic(const Duration(seconds: 1), (timer) async {
-      if (!_obdService.isConnected) { timer.cancel(); return; }
-      await _obdService.sendCommand('010C\r'); // Ask for RPM
-      await Future.delayed(const Duration(milliseconds: 300)); 
-      await _obdService.sendCommand('010D\r'); // Ask for Speed
-    });
+  // ---> UPGRADED SAFE POLLING LOOP <---
+  void _startPollingData() async {
+    _isPollingData = true;
+    
+    // Run this loop constantly as long as we are connected
+    while (_isConnectedToCar && _isPollingData) {
+      if (!_obdService.isConnected) break;
+      
+      await _obdService.sendCommand('010C\r'); // RPM
+      await Future.delayed(const Duration(milliseconds: 150)); 
+      
+      await _obdService.sendCommand('010D\r'); // Speed
+      await Future.delayed(const Duration(milliseconds: 150));
+      
+      await _obdService.sendCommand('0104\r'); // Engine Load
+      await Future.delayed(const Duration(milliseconds: 150));
+      
+      await _obdService.sendCommand('0105\r'); // Coolant Temp
+      await Future.delayed(const Duration(milliseconds: 150));
+      
+      await _obdService.sendCommand('010F\r'); // Intake Temp
+      await Future.delayed(const Duration(milliseconds: 150));
+      
+      await _obdService.sendCommand('0111\r'); // Throttle
+      await Future.delayed(const Duration(milliseconds: 150));
+    }
   }
 
   @override
   void dispose() {
-    _pollingTimer?.cancel();
+    _isPollingData = false; 
     _obdService.disconnect();
     _telemetryChannel?.unsubscribe(); 
     _ipController.dispose();
@@ -265,7 +298,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async {
-              _pollingTimer?.cancel();
+              _isPollingData = false;
               _telemetryChannel?.unsubscribe();
               _obdService.disconnect();
               await supabase.auth.signOut();
@@ -351,7 +384,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
               
               _setupRealtimeChannel(); 
               bool success = await _obdService.startSimulation(); 
-              if (mounted && success) setState(() => _isConnectedToCar = true);
+              if (mounted && success) {
+                setState(() => _isConnectedToCar = true);
+                _startPollingData(); // Need to call this so the while loop runs and fetches the simulated data via the service if necessary, though simulator pushes directly. Actually, simulator pushes directly, but we set _isPollingData true just in case. 
+                _isPollingData = true; // Ensure flag is on.
+              }
             },
           ),
         ),
@@ -470,53 +507,116 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   // --- SUB-WIDGET: LIVE DASHBOARD ---
   Widget _buildLiveDashboard() {
-    return Center(
+    return Column(
+      children: [
+        // Top Status Bar
+        Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          color: const Color(0xFF1E1E1E),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: const [
+              Icon(Icons.cloud_upload, color: Colors.green, size: 20),
+              SizedBox(width: 10),
+              Text("CLOUD TELEMETRY ACTIVE", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+            ],
+          ),
+        ),
+        
+        // Primary Gauges (RPM & Speed)
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 20),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _buildLargeGauge("RPM", _currentRpm.toString(), Icons.speed),
+              _buildLargeGauge("KM/H", _currentSpeed.toString(), Icons.directions_car),
+            ],
+          ),
+        ),
+        
+        const Divider(color: Colors.white24, thickness: 1, indent: 20, endIndent: 20),
+        
+        // Secondary Sensor Grid
+        Expanded(
+          child: GridView.count(
+            crossAxisCount: 2,
+            childAspectRatio: 1.5,
+            padding: const EdgeInsets.all(16),
+            mainAxisSpacing: 16,
+            crossAxisSpacing: 16,
+            children: [
+              _buildSmallGauge("ENGINE LOAD", "$_engineLoad %", Icons.settings_applications),
+              _buildSmallGauge("COOLANT", "$_coolantTemp °C", Icons.thermostat),
+              _buildSmallGauge("INTAKE AIR", "$_intakeTemp °C", Icons.air),
+              _buildSmallGauge("THROTTLE", "$_throttlePos %", Icons.pedal_bike),
+            ],
+          ),
+        ),
+
+        // Bottom Controls
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, padding: const EdgeInsets.symmetric(vertical: 15)),
+                  icon: const Icon(Icons.power_settings_new, color: Colors.white),
+                  label: const Text("DISCONNECT", style: TextStyle(color: Colors.white)),
+                  onPressed: () {
+                    _isPollingData = false;
+                    _telemetryChannel?.unsubscribe();
+                    _obdService.disconnect();
+                    setState(() => _isConnectedToCar = false);
+                  },
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.orange[800], padding: const EdgeInsets.symmetric(vertical: 15)),
+                  icon: const Icon(Icons.car_crash, color: Colors.white),
+                  label: const Text("DTC SCAN", style: TextStyle(color: Colors.white)),
+                  onPressed: () {
+                    Navigator.of(context).push(MaterialPageRoute(builder: (context) => DtcScreen(obdService: _obdService)));
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Helper widgets for the new UI
+  Widget _buildLargeGauge(String label, String value, IconData icon) {
+    return Column(
+      children: [
+        Icon(icon, color: Colors.cyan, size: 40),
+        const SizedBox(height: 8),
+        Text(value, style: const TextStyle(color: Colors.white, fontSize: 48, fontWeight: FontWeight.bold)),
+        Text(label, style: const TextStyle(color: Colors.white54, fontSize: 16, letterSpacing: 2)),
+      ],
+    );
+  }
+
+  Widget _buildSmallGauge(String label, String value, IconData icon) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E1E1E),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white10),
+      ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.cloud_upload, color: Colors.green, size: 40), 
-          const Text("BROADCASTING LIVE", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, letterSpacing: 2)),
-          const SizedBox(height: 30),
-          const Icon(Icons.speed, size: 80, color: Colors.cyan),
-          const SizedBox(height: 20),
-          Text("$_currentRpm", style: const TextStyle(fontSize: 60, fontWeight: FontWeight.bold, color: Colors.white)),
-          const Text("RPM", style: TextStyle(fontSize: 20, color: Colors.white54, letterSpacing: 2)),
-          const SizedBox(height: 40),
-          Text("$_currentSpeed", style: const TextStyle(fontSize: 60, fontWeight: FontWeight.bold, color: Colors.white)),
-          const Text("KM/H", style: TextStyle(fontSize: 20, color: Colors.white54, letterSpacing: 2)),
-          const SizedBox(height: 60),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15)),
-            onPressed: () {
-              _pollingTimer?.cancel();
-              _telemetryChannel?.unsubscribe();
-              _obdService.disconnect();
-              setState(() {
-                _isConnectedToCar = false;
-                _currentRpm = 0;
-                _currentSpeed = 0;
-              });
-            },
-            child: const Text("Disconnect", style: TextStyle(color: Colors.white, fontSize: 18)),
-          ),
-          const SizedBox(height: 20),
-          
-          // ---> NEW: DTC DIAGNOSTICS BUTTON <---
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.orange[800], 
-              padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15)
-            ),
-            icon: const Icon(Icons.car_crash, color: Colors.white),
-            label: const Text("READ TROUBLE CODES", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => DtcScreen(obdService: _obdService),
-                ),
-              );
-            },
-          ),
+          Icon(icon, color: Colors.cyan, size: 24),
+          const SizedBox(height: 8),
+          Text(value, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 4),
+          Text(label, style: const TextStyle(color: Colors.white54, fontSize: 12, letterSpacing: 1)),
         ],
       ),
     );
