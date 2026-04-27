@@ -1,13 +1,15 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
-import 'dart:math'; // Added for the simulator
+import 'dart:math'; 
+import 'dart:io'; // NEW: Imported for Wi-Fi Sockets
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 
 class OBDService {
-  BluetoothConnection? connection;
+  BluetoothConnection? btConnection;
+  Socket? wifiSocket; // NEW: The TCP Socket for Wi-Fi
   bool isConnected = false;
-  bool isSimulating = false; // Tracks if we are in fake mode
+  bool isSimulating = false; 
   
   final StreamController<Map<String, dynamic>> _obdDataController = StreamController.broadcast();
   Stream<Map<String, dynamic>> get obdDataStream => _obdDataController.stream;
@@ -16,56 +18,20 @@ class OBDService {
   
   // Simulation Variables
   Timer? _simulationTimer;
-  int _simRpm = 800; // Engine idle
+  int _simRpm = 800; 
   int _simSpeed = 0;
   bool _isAccelerating = true;
 
   // ==========================================
-  // 1. THE SIMULATOR MODE
+  // 1. BLUETOOTH CONNECTION
   // ==========================================
-  Future<bool> startSimulation() async {
-    isSimulating = true;
-    isConnected = true;
-    
-    // Fake a 1-second connection delay
-    await Future.delayed(const Duration(seconds: 1));
-    print("Simulation Mode Started");
-
-    // Push fake data every 500 milliseconds
-    _simulationTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) {
-      final random = Random();
-
-      // Fake Engine Logic
-      if (_isAccelerating) {
-        _simRpm += random.nextInt(300) + 100; // Rev up
-        if (_simRpm > 2500) _simSpeed += random.nextInt(4) + 1; // Speed increases as RPM gets high
-        if (_simRpm > 4500) _isAccelerating = false; // "Shift gears" or let off gas
-      } else {
-        _simRpm -= random.nextInt(400) + 100; // Revs drop
-        if (_simRpm < 900) {
-          _simRpm = random.nextInt(200) + 700; // Settle at idle
-          _isAccelerating = true; // Start accelerating again
-        }
-      }
-
-      // Push to the exact same stream the real Bluetooth uses!
-      _obdDataController.add({'type': 'RPM', 'value': _simRpm});
-      _obdDataController.add({'type': 'SPEED', 'value': _simSpeed});
-    });
-
-    return true;
-  }
-
-  // ==========================================
-  // 2. REAL BLUETOOTH CONNECTION
-  // ==========================================
-  Future<bool> connectToDevice(BluetoothDevice device) async {
-    isSimulating = false;
+  Future<bool> connectToBluetooth(BluetoothDevice device) async {
+    disconnect(); // Ensure previous connections are closed
     try {
-      connection = await BluetoothConnection.toAddress(device.address);
+      btConnection = await BluetoothConnection.toAddress(device.address);
       isConnected = true;
       
-      connection!.input!.listen(_onDataReceived).onDone(() {
+      btConnection!.input!.listen(_onDataReceived).onDone(() {
         isConnected = false;
       });
 
@@ -77,6 +43,62 @@ class OBDService {
     }
   }
 
+  // ==========================================
+  // 2. WI-FI CONNECTION (TCP SOCKET)
+  // ==========================================
+  Future<bool> connectToWiFi(String ip, int port) async {
+    disconnect(); // Ensure previous connections are closed
+    try {
+      // Connect to the OBD2 Wi-Fi Hotspot (Usually 192.168.0.10:35000)
+      wifiSocket = await Socket.connect(ip, port, timeout: const Duration(seconds: 5));
+      isConnected = true;
+      
+      // Listen to the raw TCP stream
+      wifiSocket!.listen(_onDataReceived).onDone(() {
+        isConnected = false;
+      });
+
+      await _initializeELM327();
+      return true;
+    } catch (e) {
+      isConnected = false;
+      return false;
+    }
+  }
+
+  // ==========================================
+  // 3. SIMULATOR
+  // ==========================================
+  Future<bool> startSimulation() async {
+    disconnect();
+    isSimulating = true;
+    isConnected = true;
+    
+    await Future.delayed(const Duration(seconds: 1));
+
+    _simulationTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) {
+      final random = Random();
+      if (_isAccelerating) {
+        _simRpm += random.nextInt(300) + 100;
+        if (_simRpm > 2500) _simSpeed += random.nextInt(4) + 1;
+        if (_simRpm > 4500) _isAccelerating = false;
+      } else {
+        _simRpm -= random.nextInt(400) + 100;
+        if (_simRpm < 900) {
+          _simRpm = random.nextInt(200) + 700;
+          _isAccelerating = true;
+        }
+      }
+      _obdDataController.add({'type': 'RPM', 'value': _simRpm});
+      _obdDataController.add({'type': 'SPEED', 'value': _simSpeed});
+    });
+
+    return true;
+  }
+
+  // ==========================================
+  // 4. CORE LOGIC (Init, Send, Parse)
+  // ==========================================
   Future<void> _initializeELM327() async {
     if (!isConnected || isSimulating) return;
     await sendCommand('ATZ\r');
@@ -88,15 +110,20 @@ class OBDService {
   }
 
   Future<void> sendCommand(String command) async {
-    // Only send real commands if we aren't simulating
-    if (!isSimulating && connection != null && connection!.isConnected) {
-      connection!.output.add(ascii.encode(command));
-      await connection!.output.allSent;
+    if (isSimulating) return;
+    
+    // Route command via Bluetooth OR Wi-Fi depending on what is active
+    if (btConnection != null && btConnection!.isConnected) {
+      btConnection!.output.add(ascii.encode(command));
+      await btConnection!.output.allSent;
+    } else if (wifiSocket != null) {
+      wifiSocket!.add(ascii.encode(command));
+      await wifiSocket!.flush();
     }
   }
 
   void _onDataReceived(Uint8List data) {
-    if (isSimulating) return; // Ignore real data if simulating
+    if (isSimulating) return; 
     String chunk = ascii.decode(data);
     _responseBuffer += chunk;
 
@@ -124,14 +151,15 @@ class OBDService {
     }
   }
 
-  // ==========================================
-  // 3. DISCONNECT LOGIC
-  // ==========================================
   void disconnect() {
-    _simulationTimer?.cancel(); // Stop the fake engine
-    if (connection != null && connection!.isConnected) {
-      connection?.close();
-    }
+    _simulationTimer?.cancel();
+    
+    btConnection?.close();
+    btConnection = null;
+    
+    wifiSocket?.close();
+    wifiSocket = null;
+    
     isConnected = false;
     isSimulating = false;
   }
