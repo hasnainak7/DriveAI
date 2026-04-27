@@ -28,33 +28,33 @@ class _AddVehicleScreenState extends State<AddVehicleScreen> {
     super.dispose();
   }
 
-  Future<void> _saveVehicle() async {
+ Future<void> _saveVehicle() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
 
     try {
-      // 1. Get the currently logged-in user's ID
       final userId = supabase.auth.currentUser!.id;
 
-      // 2. Insert the data into the 'vehicles' table
+      // ---> THE FIX: Handle optional VIN correctly <---
+      final vinInput = _vinController.text.trim();
+      final finalVin = vinInput.isEmpty ? null : vinInput.toUpperCase();
+
       await supabase.from('vehicles').insert({
         'owner_id': userId,
         'make': _makeController.text.trim(),
         'model': _modelController.text.trim(),
         'year': int.parse(_yearController.text.trim()),
-        'vin_number': _vinController.text.trim().toUpperCase(),
+        'vin_number': finalVin, // Send null if empty
       });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Vehicle added successfully!'), backgroundColor: Colors.green),
         );
-        // Pop the screen to go back to the dashboard
         Navigator.of(context).pop(); 
       }
     } on PostgrestException catch (error) {
-      // Catch database errors (like a duplicate VIN number)
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(error.message), backgroundColor: Colors.red),
