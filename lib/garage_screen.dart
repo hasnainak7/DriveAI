@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+// Your custom file imports
 import 'main.dart'; // To access the global supabase client
-import 'add_vehicle_screen.dart'; // So we can navigate to add more cars
+import 'add_vehicle_screen.dart'; // To navigate to add more cars
+import 'guardian_screen.dart'; // The Sprint 8 addition for remote monitoring
 
 class GarageScreen extends StatefulWidget {
   const GarageScreen({super.key});
@@ -117,9 +120,35 @@ class _GarageScreenState extends State<GarageScreen> {
               "VIN: ${vehicle['vin_number'] ?? 'Not provided'}",
               style: const TextStyle(color: Colors.white54),
             ),
-            trailing: const Icon(Icons.chevron_right, color: Colors.cyan),
+            
+            // ---> SPRINT 8 UPDATED TRAILING BUTTONS <---
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // 1. Remote Monitor Button (The Guardian Portal)
+                IconButton(
+                  tooltip: 'Remote Monitor',
+                  icon: const Icon(Icons.satellite_alt, color: Colors.orange),
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => GuardianScreen(vehicle: vehicle),
+                      ),
+                    );
+                  },
+                ),
+                // 2. Drive / Select Button
+                IconButton(
+                  tooltip: 'Set as Active Vehicle',
+                  icon: const Icon(Icons.chevron_right, color: Colors.cyan),
+                  onPressed: () {
+                    Navigator.pop(context, vehicle);
+                  },
+                ),
+              ],
+            ),
+            // Tapping the card itself acts as the "Select Active" button too
             onTap: () {
-              // When they tap a car, we return that car's data back to the Dashboard
               Navigator.pop(context, vehicle);
             },
           ),
