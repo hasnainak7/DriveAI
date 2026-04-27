@@ -146,6 +146,31 @@ class OBDService {
         int index = cleanData.indexOf('410D');
         _obdDataController.add({'type': 'SPEED', 'value': int.parse(cleanData.substring(index + 4, index + 6), radix: 16)});
       }
+      
+      // ---> NEW: PARSE DTC RESPONSES (Mode 43 is the reply for Mode 03) <---
+      if (cleanData.contains('43') && cleanData.length >= 6) {
+        int index = cleanData.indexOf('43');
+        String dtcData = cleanData.substring(index + 2);
+        List<String> foundCodes = [];
+        
+        // Loop through the hex pairs to extract codes (every 4 hex chars is 1 code)
+        for (int i = 0; i < dtcData.length - 3; i += 4) {
+          String codeA = dtcData.substring(i, i + 2);
+          String codeB = dtcData.substring(i + 2, i + 4);
+          
+          // "0000" means no code is present in that slot
+          if (codeA != "00" && codeB != "00") {
+             foundCodes.add(_decodeDtcHex(codeA, codeB));
+          }
+        }
+        // Broadcast the list of found codes to the UI
+        _obdDataController.add({'type': 'DTC', 'codes': foundCodes});
+      }
+
+      // ---> NEW: PARSE CLEAR COMMAND SUCCESS <---
+      if (cleanData.contains('44')) { // Mode 44 is the reply for Mode 04 (Clear)
+         _obdDataController.add({'type': 'DTC_CLEARED'});
+      }
     } catch (e) {
       print("Parser error");
     }
@@ -163,4 +188,66 @@ class OBDService {
     isConnected = false;
     isSimulating = false;
   }
+
+// ==========================================
+  // 5. DIAGNOSTIC TROUBLE CODES (DTC)
+  // ==========================================
+
+  // Ask the car for active trouble codes
+  Future<void> requestDTCs() async {
+    if (isSimulating) {
+      // Fake a Check Engine Light code for the simulator
+      await Future.delayed(const Duration(seconds: 1));
+      _obdDataController.add({'type': 'DTC', 'codes': ['P0301', 'P0420']});
+      return;
+    }
+    
+    // Command '03' asks the ECU for emission-related trouble codes
+    await sendCommand('03\r');
+  }
+
+  // Ask the car to clear the codes and turn off the Check Engine Light
+  Future<void> clearDTCs() async {
+    if (isSimulating) {
+      await Future.delayed(const Duration(seconds: 1));
+      _obdDataController.add({'type': 'DTC_CLEARED'});
+      return;
+    }
+
+    // Command '04' clears the codes
+    await sendCommand('04\r');
+  }
+
+  // A helper method to translate OBD-II Hex into readable codes (e.g., P0100)
+  String _decodeDtcHex(String hexA, String hexB) {
+    if (hexA.isEmpty || hexB.isEmpty) return "";
+    
+    int a = int.parse(hexA, radix: 16);
+    int b = int.parse(hexB, radix: 16);
+
+    // The first two bits of Byte A determine the system (Powertrain, Chassis, Body, Network)
+    String system;
+    switch ((a & 0xC0) >> 6) {
+      case 0: system = "P"; break; // Powertrain
+      case 1: system = "C"; break; // Chassis
+      case 2: system = "B"; break; // Body
+      case 3: system = "U"; break; // Network
+      default: system = "P";
+    }
+
+    // The next bit determines if it's a generic (0) or manufacturer-specific (1) code
+    int category = (a & 0x30) >> 4;
+    
+    // The rest of the bits form the number
+    String thirdChar = (a & 0x0F).toRadixString(16).toUpperCase();
+    String fourthFifthChar = hexB.toUpperCase().padLeft(2, '0');
+
+    return "$system$category$thirdChar$fourthFifthChar";
+  }
+
+
+
+
+
+
 }

@@ -8,6 +8,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'main.dart'; 
 import 'obd_service.dart'; 
 import 'garage_screen.dart'; 
+import 'dtc_screen.dart'; // <--- NEW IMPORT FOR DIAGNOSTICS
 
 // ==========================================
 // 1. THE AUTHENTICATION SCREEN
@@ -497,7 +498,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
               });
             },
             child: const Text("Disconnect", style: TextStyle(color: Colors.white, fontSize: 18)),
-          )
+          ),
+          const SizedBox(height: 20),
+          
+          // ---> NEW: DTC DIAGNOSTICS BUTTON <---
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange[800], 
+              padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15)
+            ),
+            icon: const Icon(Icons.car_crash, color: Colors.white),
+            label: const Text("READ TROUBLE CODES", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => DtcScreen(obdService: _obdService),
+                ),
+              );
+            },
+          ),
         ],
       ),
     );
