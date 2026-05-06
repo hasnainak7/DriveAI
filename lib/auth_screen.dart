@@ -9,6 +9,7 @@ import 'main.dart';
 import 'obd_service.dart'; 
 import 'garage_screen.dart'; 
 import 'dtc_screen.dart'; 
+import 'safety_screen.dart';
 
 // ==========================================
 // 1. THE AUTHENTICATION SCREEN
@@ -572,6 +573,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   },
                 ),
               ),
+              
+            // Put this next to or under your existing DTC SCAN button
+              Expanded(
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green[800], padding: const EdgeInsets.symmetric(vertical: 15)),
+                  icon: const Icon(Icons.shield, color: Colors.white),
+                  label: const Text("SAFETY", style: TextStyle(color: Colors.white)),
+                  onPressed: () {
+                    Navigator.of(context).push(MaterialPageRoute(builder: (context) => const SafetyScreen()));
+                  },
+                ),
+              ),
+
+
               const SizedBox(width: 16),
               Expanded(
                 child: ElevatedButton.icon(

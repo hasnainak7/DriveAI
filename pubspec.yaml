@@ -36,6 +36,8 @@ dependencies:
   sensors_plus: ^5.0.0  
   tflite_flutter: ^0.10.4 # <--- ADD TENSORFLOW LITE
 
+
+
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
