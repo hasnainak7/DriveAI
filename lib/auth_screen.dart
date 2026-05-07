@@ -3,16 +3,44 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:syncfusion_flutter_gauges/gauges.dart'; 
 
 // Your custom file imports
 import 'main.dart'; 
 import 'obd_service.dart'; 
 import 'garage_screen.dart'; 
 import 'dtc_screen.dart'; 
-import 'safety_screen.dart';
+import 'safety_screen.dart'; 
 
 // ==========================================
-// 1. THE AUTHENTICATION SCREEN
+// 1. DATA MODELS
+// ==========================================
+class SensorConfig {
+  final String id;
+  final String name;
+  final String unit;
+  final double min;
+  final double max;
+  final Color color;
+
+  SensorConfig({
+    required this.id, required this.name, required this.unit,
+    required this.min, required this.max, required this.color,
+  });
+}
+
+// Master list of available ECU sensors
+final List<SensorConfig> availableSensors = [
+  SensorConfig(id: 'RPM', name: 'Engine Speed', unit: 'RPM', min: 0, max: 8000, color: Colors.cyan),
+  SensorConfig(id: 'SPEED', name: 'Vehicle Speed', unit: 'km/h', min: 0, max: 240, color: Colors.greenAccent),
+  SensorConfig(id: 'LOAD', name: 'Engine Load', unit: '%', min: 0, max: 100, color: Colors.orangeAccent),
+  SensorConfig(id: 'COOLANT', name: 'Coolant Temp', unit: '°C', min: -40, max: 215, color: Colors.redAccent),
+  SensorConfig(id: 'INTAKE', name: 'Intake Temp', unit: '°C', min: -40, max: 215, color: Colors.blueAccent),
+  SensorConfig(id: 'THROTTLE', name: 'Throttle Pos', unit: '%', min: 0, max: 100, color: Colors.purpleAccent),
+];
+
+// ==========================================
+// 2. THE AUTHENTICATION SCREEN
 // ==========================================
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -41,28 +69,16 @@ class _AuthScreenState extends State<AuthScreen> {
 
   Future<void> _submitForm() async {
     if (!_formKey.currentState!.validate()) return;
-
     setState(() => _isLoading = true);
 
     try {
       if (_isLogin) {
-        await supabase.auth.signInWithPassword(
-          email: _emailController.text.trim(),
-          password: _passwordController.text.trim(),
-        );
+        await supabase.auth.signInWithPassword(email: _emailController.text.trim(), password: _passwordController.text.trim());
       } else {
-        await supabase.auth.signUp(
-          email: _emailController.text.trim(),
-          password: _passwordController.text.trim(),
-          data: {'full_name': _usernameController.text.trim()}, 
-        );
+        await supabase.auth.signUp(email: _emailController.text.trim(), password: _passwordController.text.trim(), data: {'full_name': _usernameController.text.trim()});
       }
       
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const DashboardScreen()),
-        );
-      }
+      if (mounted) Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (context) => const DashboardScreen()));
     } on AuthException catch (error) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.message), backgroundColor: Colors.red));
     } catch (error) {
@@ -92,39 +108,21 @@ class _AuthScreenState extends State<AuthScreen> {
                   if (!_isLogin) ...[
                     const Text('USERNAME', style: TextStyle(color: Colors.white70)),
                     const SizedBox(height: 8),
-                    TextFormField(
-                      controller: _usernameController, style: const TextStyle(color: Colors.black),
-                      decoration: InputDecoration(hintText: 'Enter username', filled: true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))),
-                      validator: (value) => value!.isEmpty ? 'Please enter a username' : null,
-                    ),
+                    TextFormField(controller: _usernameController, style: const TextStyle(color: Colors.black), decoration: InputDecoration(hintText: 'Enter username', filled: true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))), validator: (value) => value!.isEmpty ? 'Please enter a username' : null),
                     const SizedBox(height: 20),
                   ],
 
                   const Text('EMAIL', style: TextStyle(color: Colors.white70)),
                   const SizedBox(height: 8),
-                  TextFormField(
-                    controller: _emailController, keyboardType: TextInputType.emailAddress, style: const TextStyle(color: Colors.black),
-                    decoration: InputDecoration(hintText: 'Enter email', filled: true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))),
-                    validator: (value) => value!.isEmpty || !value.contains('@') ? 'Enter a valid email' : null,
-                  ),
+                  TextFormField(controller: _emailController, keyboardType: TextInputType.emailAddress, style: const TextStyle(color: Colors.black), decoration: InputDecoration(hintText: 'Enter email', filled: true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))), validator: (value) => value!.isEmpty || !value.contains('@') ? 'Enter a valid email' : null),
                   const SizedBox(height: 20),
 
                   const Text('PASSWORD', style: TextStyle(color: Colors.white70)),
                   const SizedBox(height: 8),
-                  TextFormField(
-                    controller: _passwordController, obscureText: true, style: const TextStyle(color: Colors.black),
-                    decoration: InputDecoration(hintText: 'Enter password', filled: true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))),
-                    validator: (value) => value!.length < 6 ? 'Password must be 6+ chars' : null,
-                  ),
+                  TextFormField(controller: _passwordController, obscureText: true, style: const TextStyle(color: Colors.black), decoration: InputDecoration(hintText: 'Enter password', filled: true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))), validator: (value) => value!.length < 6 ? 'Password must be 6+ chars' : null),
                   const SizedBox(height: 30),
 
-                  _isLoading
-                      ? const Center(child: CircularProgressIndicator(color: Colors.cyan))
-                      : ElevatedButton(
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.cyan, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-                          onPressed: _submitForm,
-                          child: Text(_isLogin ? 'LOGIN' : 'REGISTER', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-                        ),
+                  _isLoading ? const Center(child: CircularProgressIndicator(color: Colors.cyan)) : ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.cyan, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))), onPressed: _submitForm, child: Text(_isLogin ? 'LOGIN' : 'REGISTER', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white))),
                   const SizedBox(height: 20),
 
                   TextButton(
@@ -142,7 +140,7 @@ class _AuthScreenState extends State<AuthScreen> {
 }
 
 // ==========================================
-// 2. THE HARDWARE DASHBOARD SCREEN
+// 3. THE HARDWARE DASHBOARD SCREEN
 // ==========================================
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -157,7 +155,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _isScanning = false;
   bool _isConnectedToCar = false; 
 
-  // Full Sensor Array
+  // Live Sensor Data
   int _currentRpm = 0;
   int _currentSpeed = 0;
   int _engineLoad = 0;
@@ -166,21 +164,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _throttlePos = 0;
   
   bool _isPollingData = false; 
-  Map<String, dynamic>? _activeVehicle;
+  Timer? _dbLogTimer; // <--- NEW: Database Logging Timer
 
+  Map<String, dynamic>? _activeVehicle;
   RealtimeChannel? _telemetryChannel;
 
-  // Connection UI State
+  // UI State
   bool _showWifiConfig = false; 
   final _ipController = TextEditingController(text: "192.168.0.10"); 
   final _portController = TextEditingController(text: "35000"); 
+  
+  // Dynamic Dashboard Selection (Default visible sensors)
+  List<String> _selectedSensorIds = ['RPM', 'SPEED', 'LOAD', 'COOLANT'];
 
   @override
   void initState() {
     super.initState();
     _requestPermissions();
     
-    // Listen to the data coming from our OBD parser (or simulator)
+    // Listen to OBD Parser
     _obdService.obdDataStream.listen((data) {
       if (mounted) {
         setState(() {
@@ -192,18 +194,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
           if (data['type'] == 'THROTTLE') _throttlePos = data['value'];
         });
 
-        // Push data to the Supabase Cloud (Now including all sensors!)
+        // Push data to Supabase Cloud WebSockets (Live View)
         if (_isConnectedToCar && _telemetryChannel != null) {
           _telemetryChannel!.sendBroadcastMessage(
             event: 'live_data',
             payload: {
               'vehicle_id': _activeVehicle!['id'],
-              'rpm': _currentRpm,
-              'speed': _currentSpeed,
-              'load': _engineLoad,
-              'coolant': _coolantTemp,
-              'intake': _intakeTemp,
-              'throttle': _throttlePos,
+              'rpm': _currentRpm, 'speed': _currentSpeed, 'load': _engineLoad,
+              'coolant': _coolantTemp, 'intake': _intakeTemp, 'throttle': _throttlePos,
               'timestamp': DateTime.now().toIso8601String(),
             },
           );
@@ -216,10 +214,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (_activeVehicle == null) return;
     final channelName = 'telemetry_${_activeVehicle!['id']}';
     _telemetryChannel = supabase.channel(channelName);
-    
-    _telemetryChannel!.subscribe((status, [error]) {
-      if (status == RealtimeSubscribeStatus.subscribed) {
-        print('Successfully connected to Supabase Realtime Channel: $channelName');
+    _telemetryChannel!.subscribe();
+  }
+
+  // ---> NEW: DATABASE LOGGING METHOD <---
+  void _startDatabaseLogging() {
+    // Save a snapshot of the engine to Supabase every 5 seconds for permanent storage
+    _dbLogTimer = Timer.periodic(const Duration(seconds: 5), (timer) async {
+      if (!_isConnectedToCar || _activeVehicle == null) return;
+
+      try {
+        await supabase.from('telemetry_logs').insert({
+          'vehicle_id': _activeVehicle!['id'],
+          'rpm': _currentRpm,
+          'speed': _currentSpeed,
+          'engine_load': _engineLoad,
+          'coolant_temp': _coolantTemp,
+          'intake_temp': _intakeTemp,
+          'throttle_pos': _throttlePos,
+        });
+        print("Logged snapshot to Supabase database.");
+      } catch (e) {
+        print("Failed to log telemetry: $e");
       }
     });
   }
@@ -238,37 +254,67 @@ class _DashboardScreenState extends State<DashboardScreen> {
     finally { setState(() => _isScanning = false); }
   }
 
-  // ---> UPGRADED SAFE POLLING LOOP <---
+  // Safe Async Polling Loop
   void _startPollingData() async {
     _isPollingData = true;
-    
-    // Run this loop constantly as long as we are connected
     while (_isConnectedToCar && _isPollingData) {
       if (!_obdService.isConnected) break;
-      
-      await _obdService.sendCommand('010C\r'); // RPM
-      await Future.delayed(const Duration(milliseconds: 150)); 
-      
-      await _obdService.sendCommand('010D\r'); // Speed
-      await Future.delayed(const Duration(milliseconds: 150));
-      
-      await _obdService.sendCommand('0104\r'); // Engine Load
-      await Future.delayed(const Duration(milliseconds: 150));
-      
-      await _obdService.sendCommand('0105\r'); // Coolant Temp
-      await Future.delayed(const Duration(milliseconds: 150));
-      
-      await _obdService.sendCommand('010F\r'); // Intake Temp
-      await Future.delayed(const Duration(milliseconds: 150));
-      
-      await _obdService.sendCommand('0111\r'); // Throttle
-      await Future.delayed(const Duration(milliseconds: 150));
+      await _obdService.sendCommand('010C\r'); await Future.delayed(const Duration(milliseconds: 150)); 
+      await _obdService.sendCommand('010D\r'); await Future.delayed(const Duration(milliseconds: 150));
+      await _obdService.sendCommand('0104\r'); await Future.delayed(const Duration(milliseconds: 150));
+      await _obdService.sendCommand('0105\r'); await Future.delayed(const Duration(milliseconds: 150));
+      await _obdService.sendCommand('010F\r'); await Future.delayed(const Duration(milliseconds: 150));
+      await _obdService.sendCommand('0111\r'); await Future.delayed(const Duration(milliseconds: 150));
     }
+  }
+
+  void _showSensorPicker() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1E1E1E),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Column(
+                children: [
+                  const Text("Select Dashboard Widgets", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                  const Divider(color: Colors.white24),
+                  Expanded(
+                    child: ListView(
+                      children: availableSensors.map((sensor) {
+                        bool isSelected = _selectedSensorIds.contains(sensor.id);
+                        return CheckboxListTile(
+                          title: Text(sensor.name, style: const TextStyle(color: Colors.white)),
+                          value: isSelected,
+                          activeColor: Colors.cyan,
+                          checkColor: Colors.black,
+                          onChanged: (val) {
+                            setState(() {
+                              if (val == true) _selectedSensorIds.add(sensor.id);
+                              else _selectedSensorIds.remove(sensor.id);
+                            });
+                            setModalState(() {}); 
+                          },
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
   void dispose() {
     _isPollingData = false; 
+    _dbLogTimer?.cancel(); // <--- Cleanup timer
     _obdService.disconnect();
     _telemetryChannel?.unsubscribe(); 
     _ipController.dispose();
@@ -300,6 +346,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             icon: const Icon(Icons.logout),
             onPressed: () async {
               _isPollingData = false;
+              _dbLogTimer?.cancel(); // <--- Cleanup timer
               _telemetryChannel?.unsubscribe();
               _obdService.disconnect();
               await supabase.auth.signOut();
@@ -315,7 +362,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildDeviceScanner() {
     return Column(
       children: [
-        // --- ACTIVE VEHICLE CARD ---
         Container(
           width: double.infinity, padding: const EdgeInsets.all(16), color: const Color(0xFF1E1E1E),
           child: Column(
@@ -328,8 +374,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ],
           ),
         ),
-
-        // --- THE CONNECTION TOGGLE ---
         Padding(
           padding: const EdgeInsets.all(16.0),
           child: Row(
@@ -339,10 +383,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   onTap: () => setState(() => _showWifiConfig = false),
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 12),
-                    decoration: BoxDecoration(
-                      color: !_showWifiConfig ? Colors.cyan.withOpacity(0.2) : Colors.transparent,
-                      border: Border(bottom: BorderSide(color: !_showWifiConfig ? Colors.cyan : Colors.white24, width: 2)),
-                    ),
+                    decoration: BoxDecoration(color: !_showWifiConfig ? Colors.cyan.withOpacity(0.2) : Colors.transparent, border: Border(bottom: BorderSide(color: !_showWifiConfig ? Colors.cyan : Colors.white24, width: 2))),
                     child: const Center(child: Text("BLUETOOTH", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
                   ),
                 ),
@@ -352,10 +393,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   onTap: () => setState(() => _showWifiConfig = true),
                   child: Container(
                     padding: const EdgeInsets.symmetric(vertical: 12),
-                    decoration: BoxDecoration(
-                      color: _showWifiConfig ? Colors.cyan.withOpacity(0.2) : Colors.transparent,
-                      border: Border(bottom: BorderSide(color: _showWifiConfig ? Colors.cyan : Colors.white24, width: 2)),
-                    ),
+                    decoration: BoxDecoration(color: _showWifiConfig ? Colors.cyan.withOpacity(0.2) : Colors.transparent, border: Border(bottom: BorderSide(color: _showWifiConfig ? Colors.cyan : Colors.white24, width: 2))),
                     child: const Center(child: Text("WI-FI", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
                   ),
                 ),
@@ -363,13 +401,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ],
           ),
         ),
-
-        // --- DYNAMIC CONTENT AREA ---
-        Expanded(
-          child: _showWifiConfig ? _buildWifiConfig() : _buildBluetoothScanner(),
-        ),
-
-        // --- SIMULATION BUTTON ---
+        Expanded(child: _showWifiConfig ? _buildWifiConfig() : _buildBluetoothScanner()),
         Container(
           margin: const EdgeInsets.all(16.0), width: double.infinity,
           child: ElevatedButton.icon(
@@ -377,18 +409,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
             icon: const Icon(Icons.developer_mode, color: Colors.black),
             label: const Text("START SIMULATION MODE", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16)),
             onPressed: () async {
-              if (_activeVehicle == null) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a vehicle first.'), backgroundColor: Colors.red));
-                return;
-              }
+              if (_activeVehicle == null) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a vehicle first.'), backgroundColor: Colors.red)); return; }
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Starting Simulator...'), duration: Duration(seconds: 1)));
-              
               _setupRealtimeChannel(); 
               bool success = await _obdService.startSimulation(); 
-              if (mounted && success) {
-                setState(() => _isConnectedToCar = true);
-                _startPollingData(); // Need to call this so the while loop runs and fetches the simulated data via the service if necessary, though simulator pushes directly. Actually, simulator pushes directly, but we set _isPollingData true just in case. 
-                _isPollingData = true; // Ensure flag is on.
+              if (mounted && success) { 
+                setState(() => _isConnectedToCar = true); 
+                _startPollingData(); 
+                _startDatabaseLogging(); // <--- Trigger logging
               }
             },
           ),
@@ -397,7 +425,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // --- SUB-WIDGET: BLUETOOTH LIST ---
   Widget _buildBluetoothScanner() {
     return Column(
       children: [
@@ -414,22 +441,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.cyan, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))),
                   child: const Text("Connect", style: TextStyle(color: Colors.white)),
                   onPressed: () async {
-                    if (_activeVehicle == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a vehicle first.'), backgroundColor: Colors.red));
-                      return;
-                    }
+                    if (_activeVehicle == null) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a vehicle first.'), backgroundColor: Colors.red)); return; }
                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Connecting to Bluetooth...')));
-                    
                     _setupRealtimeChannel(); 
                     bool success = await _obdService.connectToBluetooth(_devices[index]); 
-                    
                     if (mounted) {
                       ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                      if (success) {
-                        setState(() => _isConnectedToCar = true);
+                      if (success) { 
+                        setState(() => _isConnectedToCar = true); 
                         _startPollingData(); 
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Connection failed.'), backgroundColor: Colors.red));
+                        _startDatabaseLogging(); // <--- Trigger logging
+                      } else { 
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Connection failed.'), backgroundColor: Colors.red)); 
                       }
                     }
                   },
@@ -442,7 +465,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // --- SUB-WIDGET: WI-FI FORM ---
   Widget _buildWifiConfig() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24.0),
@@ -452,50 +474,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
         children: [
           const Icon(Icons.wifi_tethering, size: 60, color: Colors.cyan),
           const SizedBox(height: 20),
-          const Text("Ensure your phone is connected to the OBD-II adapter's Wi-Fi network before connecting.", textAlign: TextAlign.center, style: TextStyle(color: Colors.white70)),
+          const Text("Ensure your phone is connected to the OBD-II adapter's Wi-Fi network.", textAlign: TextAlign.center, style: TextStyle(color: Colors.white70)),
           const SizedBox(height: 30),
           Row(
             children: [
-              Expanded(
-                flex: 2,
-                child: TextField(
-                  controller: _ipController,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(labelText: 'IP Address', labelStyle: const TextStyle(color: Colors.cyan), filled: true, fillColor: const Color(0xFF1E1E1E), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))),
-                ),
-              ),
+              Expanded(flex: 2, child: TextField(controller: _ipController, style: const TextStyle(color: Colors.white), decoration: InputDecoration(labelText: 'IP Address', labelStyle: const TextStyle(color: Colors.cyan), filled: true, fillColor: const Color(0xFF1E1E1E), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))))),
               const SizedBox(width: 16),
-              Expanded(
-                flex: 1,
-                child: TextField(
-                  controller: _portController,
-                  keyboardType: TextInputType.number,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(labelText: 'Port', labelStyle: const TextStyle(color: Colors.cyan), filled: true, fillColor: const Color(0xFF1E1E1E), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))),
-                ),
-              ),
+              Expanded(flex: 1, child: TextField(controller: _portController, keyboardType: TextInputType.number, style: const TextStyle(color: Colors.white), decoration: InputDecoration(labelText: 'Port', labelStyle: const TextStyle(color: Colors.cyan), filled: true, fillColor: const Color(0xFF1E1E1E), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))))),
             ],
           ),
           const SizedBox(height: 30),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.cyan, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
             onPressed: () async {
-              if (_activeVehicle == null) {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a vehicle first.'), backgroundColor: Colors.red));
-                return;
-              }
+              if (_activeVehicle == null) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a vehicle first.'), backgroundColor: Colors.red)); return; }
               ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Establishing TCP Socket Connection...')));
-              
               _setupRealtimeChannel(); 
               bool success = await _obdService.connectToWiFi(_ipController.text.trim(), int.parse(_portController.text.trim()));
-              
               if (mounted) {
                 ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                if (success) {
-                  setState(() => _isConnectedToCar = true);
+                if (success) { 
+                  setState(() => _isConnectedToCar = true); 
                   _startPollingData(); 
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('TCP Connection failed. Check Wi-Fi settings.'), backgroundColor: Colors.red));
+                  _startDatabaseLogging(); // <--- Trigger logging
+                } else { 
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('TCP Connection failed.'), backgroundColor: Colors.red)); 
                 }
               }
             },
@@ -506,98 +509,99 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // --- SUB-WIDGET: LIVE DASHBOARD ---
+  // --- UPGRADED PREMIUM DASHBOARD ---
   Widget _buildLiveDashboard() {
+    final activeConfigs = availableSensors.where((s) => _selectedSensorIds.contains(s.id)).toList();
+
     return Column(
       children: [
-        // Top Status Bar
-        Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          color: const Color(0xFF1E1E1E),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: const [
-              Icon(Icons.cloud_upload, color: Colors.green, size: 20),
-              SizedBox(width: 10),
-              Text("CLOUD TELEMETRY ACTIVE", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
-            ],
-          ),
-        ),
-        
-        // Primary Gauges (RPM & Speed)
         Padding(
-          padding: const EdgeInsets.symmetric(vertical: 20),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildLargeGauge("RPM", _currentRpm.toString(), Icons.speed),
-              _buildLargeGauge("KM/H", _currentSpeed.toString(), Icons.directions_car),
+              const Text("LIVE TELEMETRY", style: TextStyle(color: Colors.white54, letterSpacing: 1.5, fontWeight: FontWeight.bold)),
+              TextButton.icon(
+                icon: const Icon(Icons.tune, color: Colors.cyan, size: 18),
+                label: const Text("CUSTOMIZE", style: TextStyle(color: Colors.cyan)),
+                onPressed: _showSensorPicker,
+              ),
             ],
           ),
         ),
         
-        const Divider(color: Colors.white24, thickness: 1, indent: 20, endIndent: 20),
-        
-        // Secondary Sensor Grid
         Expanded(
-          child: GridView.count(
-            crossAxisCount: 2,
-            childAspectRatio: 1.5,
+          child: GridView.builder(
             padding: const EdgeInsets.all(16),
-            mainAxisSpacing: 16,
-            crossAxisSpacing: 16,
-            children: [
-              _buildSmallGauge("ENGINE LOAD", "$_engineLoad %", Icons.settings_applications),
-              _buildSmallGauge("COOLANT", "$_coolantTemp °C", Icons.thermostat),
-              _buildSmallGauge("INTAKE AIR", "$_intakeTemp °C", Icons.air),
-              _buildSmallGauge("THROTTLE", "$_throttlePos %", Icons.pedal_bike),
-            ],
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              childAspectRatio: 0.9,
+              mainAxisSpacing: 16,
+              crossAxisSpacing: 16,
+            ),
+            itemCount: activeConfigs.length,
+            itemBuilder: (context, index) {
+              final config = activeConfigs[index];
+              double liveValue = 0.0;
+              
+              if (config.id == 'RPM') liveValue = _currentRpm.toDouble();
+              if (config.id == 'SPEED') liveValue = _currentSpeed.toDouble();
+              if (config.id == 'LOAD') liveValue = _engineLoad.toDouble();
+              if (config.id == 'COOLANT') liveValue = _coolantTemp.toDouble();
+              if (config.id == 'INTAKE') liveValue = _intakeTemp.toDouble();
+              if (config.id == 'THROTTLE') liveValue = _throttlePos.toDouble();
+
+              return _buildCustomGauge(config, liveValue);
+            },
           ),
         ),
 
-        // Bottom Controls
+        // Bottom Controls (DTC, Safety, Disconnect)
         Padding(
           padding: const EdgeInsets.all(16.0),
-          child: Row(
+          child: Column(
             children: [
-              Expanded(
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.orange[800], padding: const EdgeInsets.symmetric(vertical: 15)),
+                      icon: const Icon(Icons.car_crash, color: Colors.white),
+                      label: const Text("DTC SCAN", style: TextStyle(color: Colors.white)),
+                      onPressed: () {
+                        Navigator.of(context).push(MaterialPageRoute(builder: (context) => DtcScreen(obdService: _obdService)));
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.green[800], padding: const EdgeInsets.symmetric(vertical: 15)),
+                      icon: const Icon(Icons.shield, color: Colors.white),
+                      label: const Text("SAFETY", style: TextStyle(color: Colors.white)),
+                      onPressed: () {
+                        Navigator.of(context).push(MaterialPageRoute(builder: (context) => const SafetyScreen()));
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, padding: const EdgeInsets.symmetric(vertical: 15)),
                   icon: const Icon(Icons.power_settings_new, color: Colors.white),
-                  label: const Text("DISCONNECT", style: TextStyle(color: Colors.white)),
+                  label: const Text("DISCONNECT", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 2)),
                   onPressed: () {
                     _isPollingData = false;
+                    _dbLogTimer?.cancel(); // <--- Cleanup timer
                     _telemetryChannel?.unsubscribe();
                     _obdService.disconnect();
                     setState(() => _isConnectedToCar = false);
                   },
                 ),
               ),
-              
-            // Put this next to or under your existing DTC SCAN button
-              Expanded(
-                child: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green[800], padding: const EdgeInsets.symmetric(vertical: 15)),
-                  icon: const Icon(Icons.shield, color: Colors.white),
-                  label: const Text("SAFETY", style: TextStyle(color: Colors.white)),
-                  onPressed: () {
-                    Navigator.of(context).push(MaterialPageRoute(builder: (context) => const SafetyScreen()));
-                  },
-                ),
-              ),
-
-
-              const SizedBox(width: 16),
-              Expanded(
-                child: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.orange[800], padding: const EdgeInsets.symmetric(vertical: 15)),
-                  icon: const Icon(Icons.car_crash, color: Colors.white),
-                  label: const Text("DTC SCAN", style: TextStyle(color: Colors.white)),
-                  onPressed: () {
-                    Navigator.of(context).push(MaterialPageRoute(builder: (context) => DtcScreen(obdService: _obdService)));
-                  },
-                ),
-              ),
             ],
           ),
         ),
@@ -605,33 +609,56 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // Helper widgets for the new UI
-  Widget _buildLargeGauge(String label, String value, IconData icon) {
-    return Column(
-      children: [
-        Icon(icon, color: Colors.cyan, size: 40),
-        const SizedBox(height: 8),
-        Text(value, style: const TextStyle(color: Colors.white, fontSize: 48, fontWeight: FontWeight.bold)),
-        Text(label, style: const TextStyle(color: Colors.white54, fontSize: 16, letterSpacing: 2)),
-      ],
-    );
-  }
-
-  Widget _buildSmallGauge(String label, String value, IconData icon) {
+  // Syncfusion Radial Gauge Builder
+  Widget _buildCustomGauge(SensorConfig config, double currentValue) {
     return Container(
+      padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         color: const Color(0xFF1E1E1E),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white10),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
       ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, color: Colors.cyan, size: 24),
-          const SizedBox(height: 8),
-          Text(value, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 4),
-          Text(label, style: const TextStyle(color: Colors.white54, fontSize: 12, letterSpacing: 1)),
+      child: SfRadialGauge(
+        title: GaugeTitle(
+          text: config.name.toUpperCase(),
+          textStyle: const TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1),
+        ),
+        axes: <RadialAxis>[
+          RadialAxis(
+            minimum: config.min,
+            maximum: config.max,
+            showLabels: false,
+            showTicks: false,
+            axisLineStyle: const AxisLineStyle(
+              thickness: 0.1,
+              cornerStyle: CornerStyle.bothCurve,
+              color: Color(0xFF2A2A2A),
+              thicknessUnit: GaugeSizeUnit.factor,
+            ),
+            pointers: <GaugePointer>[
+              RangePointer(
+                value: currentValue,
+                width: 0.1,
+                sizeUnit: GaugeSizeUnit.factor,
+                cornerStyle: CornerStyle.bothCurve,
+                gradient: SweepGradient(colors: <Color>[config.color.withOpacity(0.5), config.color], stops: const <double>[0.25, 0.75]),
+              ),
+              MarkerPointer(value: currentValue, markerType: MarkerType.circle, color: Colors.white, markerHeight: 10, markerWidth: 10),
+            ],
+            annotations: <GaugeAnnotation>[
+              GaugeAnnotation(
+                positionFactor: 0.1,
+                angle: 90,
+                widget: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(currentValue.toStringAsFixed(0), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)),
+                    Text(config.unit, style: const TextStyle(fontSize: 10, color: Colors.white54)),
+                  ],
+                ),
+              )
+            ],
+          ),
         ],
       ),
     );
