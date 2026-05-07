@@ -37,6 +37,7 @@ dependencies:
   tflite_flutter: ^0.10.4 # <--- ADD TENSORFLOW LITE
   syncfusion_flutter_gauges: ^21.1.35
   google_fonts: ^6.1.0
+  http: ^1.2.0
 
 
 

@@ -569,7 +569,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       icon: const Icon(Icons.car_crash, color: Colors.white),
                       label: const Text("DTC SCAN", style: TextStyle(color: Colors.white)),
                       onPressed: () {
-                        Navigator.of(context).push(MaterialPageRoute(builder: (context) => DtcScreen(obdService: _obdService)));
+                        Navigator.of(context).push(MaterialPageRoute(
+                         builder: (context) => DtcScreen(
+                         obdService: _obdService,
+                        activeVehicle: _activeVehicle, // <--- JUST ADD THIS LINE!
+                          )
+                          ));
                       },
                     ),
                   ),
