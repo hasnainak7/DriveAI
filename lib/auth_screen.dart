@@ -1,17 +1,19 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:syncfusion_flutter_gauges/gauges.dart'; 
+import 'package:syncfusion_flutter_gauges/gauges.dart';
+import 'package:http/http.dart' as http; // For the AI Mechanic API
 
 // Your custom file imports
-import 'main.dart'; 
-import 'obd_service.dart'; 
-import 'garage_screen.dart'; 
-import 'dtc_screen.dart'; 
-import 'safety_screen.dart'; 
-import 'maintenance_screen.dart'; 
+import 'main.dart';
+import 'obd_service.dart';
+import 'garage_screen.dart';
+import 'dtc_screen.dart';
+import 'safety_screen.dart';
+import 'maintenance_screen.dart';
 
 // ==========================================
 // 1. DATA MODELS
@@ -25,18 +27,64 @@ class SensorConfig {
   final Color color;
 
   SensorConfig({
-    required this.id, required this.name, required this.unit,
-    required this.min, required this.max, required this.color,
+    required this.id,
+    required this.name,
+    required this.unit,
+    required this.min,
+    required this.max,
+    required this.color,
   });
 }
 
 final List<SensorConfig> availableSensors = [
-  SensorConfig(id: 'RPM', name: 'Engine Speed', unit: 'RPM', min: 0, max: 8000, color: Colors.cyan),
-  SensorConfig(id: 'SPEED', name: 'Vehicle Speed', unit: 'km/h', min: 0, max: 240, color: Colors.greenAccent),
-  SensorConfig(id: 'LOAD', name: 'Engine Load', unit: '%', min: 0, max: 100, color: Colors.orangeAccent),
-  SensorConfig(id: 'COOLANT', name: 'Coolant Temp', unit: '°C', min: -40, max: 215, color: Colors.redAccent),
-  SensorConfig(id: 'INTAKE', name: 'Intake Temp', unit: '°C', min: -40, max: 215, color: Colors.blueAccent),
-  SensorConfig(id: 'THROTTLE', name: 'Throttle Pos', unit: '%', min: 0, max: 100, color: Colors.purpleAccent),
+  SensorConfig(
+    id: 'RPM',
+    name: 'Engine Speed',
+    unit: 'RPM',
+    min: 0,
+    max: 8000,
+    color: Colors.cyan,
+  ),
+  SensorConfig(
+    id: 'SPEED',
+    name: 'Vehicle Speed',
+    unit: 'km/h',
+    min: 0,
+    max: 240,
+    color: Colors.greenAccent,
+  ),
+  SensorConfig(
+    id: 'LOAD',
+    name: 'Engine Load',
+    unit: '%',
+    min: 0,
+    max: 100,
+    color: Colors.orangeAccent,
+  ),
+  SensorConfig(
+    id: 'COOLANT',
+    name: 'Coolant Temp',
+    unit: '°C',
+    min: -40,
+    max: 215,
+    color: Colors.redAccent,
+  ),
+  SensorConfig(
+    id: 'INTAKE',
+    name: 'Intake Temp',
+    unit: '°C',
+    min: -40,
+    max: 215,
+    color: Colors.blueAccent,
+  ),
+  SensorConfig(
+    id: 'THROTTLE',
+    name: 'Throttle Pos',
+    unit: '%',
+    min: 0,
+    max: 100,
+    color: Colors.purpleAccent,
+  ),
 ];
 
 // ==========================================
@@ -54,8 +102,8 @@ class _AuthScreenState extends State<AuthScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _usernameController = TextEditingController();
-  
-  bool _isLogin = true; 
+
+  bool _isLogin = true;
   bool _isLoading = false;
 
   @override
@@ -72,16 +120,35 @@ class _AuthScreenState extends State<AuthScreen> {
 
     try {
       if (_isLogin) {
-        await supabase.auth.signInWithPassword(email: _emailController.text.trim(), password: _passwordController.text.trim());
+        await supabase.auth.signInWithPassword(
+          email: _emailController.text.trim(),
+          password: _passwordController.text.trim(),
+        );
       } else {
-        await supabase.auth.signUp(email: _emailController.text.trim(), password: _passwordController.text.trim(), data: {'full_name': _usernameController.text.trim()});
+        await supabase.auth.signUp(
+          email: _emailController.text.trim(),
+          password: _passwordController.text.trim(),
+          data: {'full_name': _usernameController.text.trim()},
+        );
       }
-      
-      if (mounted) Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (context) => const HomeScreen()));
+
+      if (mounted)
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const HomeScreen()),
+        );
     } on AuthException catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.message), backgroundColor: Colors.red));
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.message), backgroundColor: Colors.red),
+        );
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('An unexpected error occurred'), backgroundColor: Colors.red));
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('An unexpected error occurred'),
+            backgroundColor: Colors.red,
+          ),
+        );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -90,7 +157,7 @@ class _AuthScreenState extends State<AuthScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF121212), 
+      backgroundColor: const Color(0xFF121212),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -101,32 +168,129 @@ class _AuthScreenState extends State<AuthScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(_isLogin ? 'LOGIN' : 'REGISTER', textAlign: TextAlign.center, style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: Colors.white, letterSpacing: 2)),
+                  Text(
+                    _isLogin ? 'LOGIN' : 'REGISTER',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 40,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      letterSpacing: 2,
+                    ),
+                  ),
                   const SizedBox(height: 40),
-                  
+
                   if (!_isLogin) ...[
-                    const Text('USERNAME', style: TextStyle(color: Colors.white70)),
+                    const Text(
+                      'USERNAME',
+                      style: TextStyle(color: Colors.white70),
+                    ),
                     const SizedBox(height: 8),
-                    TextFormField(controller: _usernameController, style: const TextStyle(color: Colors.black), decoration: InputDecoration(hintText: 'Enter username', filled: true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))), validator: (value) => value!.isEmpty ? 'Please enter a username' : null),
+                    TextFormField(
+                      controller: _usernameController,
+                      style: const TextStyle(color: Colors.black),
+                      decoration: InputDecoration(
+                        hintText: 'Enter username',
+                        filled: true,
+                        fillColor: Colors.white,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      validator: (value) =>
+                          value!.isEmpty ? 'Please enter a username' : null,
+                    ),
                     const SizedBox(height: 20),
                   ],
 
                   const Text('EMAIL', style: TextStyle(color: Colors.white70)),
                   const SizedBox(height: 8),
-                  TextFormField(controller: _emailController, keyboardType: TextInputType.emailAddress, style: const TextStyle(color: Colors.black), decoration: InputDecoration(hintText: 'Enter email', filled: true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))), validator: (value) => value!.isEmpty || !value.contains('@') ? 'Enter a valid email' : null),
+                  TextFormField(
+                    controller: _emailController,
+                    keyboardType: TextInputType.emailAddress,
+                    style: const TextStyle(color: Colors.black),
+                    decoration: InputDecoration(
+                      hintText: 'Enter email',
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    validator: (value) => value!.isEmpty || !value.contains('@')
+                        ? 'Enter a valid email'
+                        : null,
+                  ),
                   const SizedBox(height: 20),
 
-                  const Text('PASSWORD', style: TextStyle(color: Colors.white70)),
+                  const Text(
+                    'PASSWORD',
+                    style: TextStyle(color: Colors.white70),
+                  ),
                   const SizedBox(height: 8),
-                  TextFormField(controller: _passwordController, obscureText: true, style: const TextStyle(color: Colors.black), decoration: InputDecoration(hintText: 'Enter password', filled: true, fillColor: Colors.white, border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))), validator: (value) => value!.length < 6 ? 'Password must be 6+ chars' : null),
+                  TextFormField(
+                    controller: _passwordController,
+                    obscureText: true,
+                    style: const TextStyle(color: Colors.black),
+                    decoration: InputDecoration(
+                      hintText: 'Enter password',
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    validator: (value) =>
+                        value!.length < 6 ? 'Password must be 6+ chars' : null,
+                  ),
                   const SizedBox(height: 30),
 
-                  _isLoading ? const Center(child: CircularProgressIndicator(color: Colors.cyan)) : ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.cyan, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))), onPressed: _submitForm, child: Text(_isLogin ? 'LOGIN' : 'REGISTER', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white))),
+                  _isLoading
+                      ? const Center(
+                          child: CircularProgressIndicator(color: Colors.cyan),
+                        )
+                      : ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.cyan,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          onPressed: _submitForm,
+                          child: Text(
+                            _isLogin ? 'LOGIN' : 'REGISTER',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
                   const SizedBox(height: 20),
 
                   TextButton(
-                    onPressed: () => setState(() { _isLogin = !_isLogin; _formKey.currentState?.reset(); }),
-                    child: RichText(text: TextSpan(text: _isLogin ? "Don't have an account? " : "Already have an account? ", style: const TextStyle(color: Colors.white), children: [TextSpan(text: _isLogin ? 'Signup' : 'Login', style: const TextStyle(color: Colors.cyan, fontWeight: FontWeight.bold))])),
+                    onPressed: () => setState(() {
+                      _isLogin = !_isLogin;
+                      _formKey.currentState?.reset();
+                    }),
+                    child: RichText(
+                      text: TextSpan(
+                        text: _isLogin
+                            ? "Don't have an account? "
+                            : "Already have an account? ",
+                        style: const TextStyle(color: Colors.white),
+                        children: [
+                          TextSpan(
+                            text: _isLogin ? 'Signup' : 'Login',
+                            style: const TextStyle(
+                              color: Colors.cyan,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -153,13 +317,13 @@ class _HomeScreenState extends State<HomeScreen> {
   final OBDService _obdService = OBDService();
   Map<String, dynamic>? _activeVehicle;
   RealtimeChannel? _telemetryChannel;
-  
+
   // State Variables
   bool _isDemoMode = false;
   bool _isConnected = false;
-  bool _isPollingData = false; 
-  Timer? _dbLogTimer; 
-  bool _hasTriggeredMaintenanceAlert = false; 
+  bool _isPollingData = false;
+  Timer? _dbLogTimer;
+  bool _hasTriggeredMaintenanceAlert = false;
 
   // Background Data Tracking
   int _currentRpm = 0, _currentSpeed = 0, _engineLoad = 0;
@@ -169,7 +333,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _requestPermissions();
-    
+
     // Master Background Listener
     _obdService.obdDataStream.listen((data) {
       if (mounted) {
@@ -179,7 +343,7 @@ class _HomeScreenState extends State<HomeScreen> {
         if (data['type'] == 'COOLANT') _coolantTemp = data['value'];
         if (data['type'] == 'INTAKE') _intakeTemp = data['value'];
         if (data['type'] == 'THROTTLE') _throttlePos = data['value'];
-        
+
         if (data['type'] == 'DISTANCE') {
           _currentDistance = data['value'];
           _checkMaintenanceStatus(_currentDistance);
@@ -191,8 +355,12 @@ class _HomeScreenState extends State<HomeScreen> {
             event: 'live_data',
             payload: {
               'vehicle_id': _activeVehicle!['id'],
-              'rpm': _currentRpm, 'speed': _currentSpeed, 'load': _engineLoad,
-              'coolant': _coolantTemp, 'intake': _intakeTemp, 'throttle': _throttlePos,
+              'rpm': _currentRpm,
+              'speed': _currentSpeed,
+              'load': _engineLoad,
+              'coolant': _coolantTemp,
+              'intake': _intakeTemp,
+              'throttle': _throttlePos,
               'timestamp': DateTime.now().toIso8601String(),
             },
           );
@@ -202,7 +370,11 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _requestPermissions() async {
-    await [Permission.bluetoothConnect, Permission.bluetoothScan, Permission.location].request();
+    await [
+      Permission.bluetoothConnect,
+      Permission.bluetoothScan,
+      Permission.location,
+    ].request();
   }
 
   void _setupRealtimeChannel() {
@@ -219,10 +391,16 @@ class _HomeScreenState extends State<HomeScreen> {
       try {
         await supabase.from('telemetry_logs').insert({
           'vehicle_id': _activeVehicle!['id'],
-          'rpm': _currentRpm, 'speed': _currentSpeed, 'engine_load': _engineLoad,
-          'coolant_temp': _coolantTemp, 'intake_temp': _intakeTemp, 'throttle_pos': _throttlePos,
+          'rpm': _currentRpm,
+          'speed': _currentSpeed,
+          'engine_load': _engineLoad,
+          'coolant_temp': _coolantTemp,
+          'intake_temp': _intakeTemp,
+          'throttle_pos': _throttlePos,
         });
-      } catch (e) { print("Failed to log telemetry: $e"); }
+      } catch (e) {
+        print("Failed to log telemetry: $e");
+      }
     });
   }
 
@@ -230,13 +408,20 @@ class _HomeScreenState extends State<HomeScreen> {
     _isPollingData = true;
     while (_isConnected && _isPollingData) {
       if (!_obdService.isConnected) break;
-      await _obdService.sendCommand('010C\r'); await Future.delayed(const Duration(milliseconds: 150)); 
-      await _obdService.sendCommand('010D\r'); await Future.delayed(const Duration(milliseconds: 150));
-      await _obdService.sendCommand('0104\r'); await Future.delayed(const Duration(milliseconds: 150));
-      await _obdService.sendCommand('0105\r'); await Future.delayed(const Duration(milliseconds: 150));
-      await _obdService.sendCommand('010F\r'); await Future.delayed(const Duration(milliseconds: 150));
-      await _obdService.sendCommand('0111\r'); await Future.delayed(const Duration(milliseconds: 150));
-      await _obdService.sendCommand('0131\r'); await Future.delayed(const Duration(milliseconds: 150)); 
+      await _obdService.sendCommand('010C\r');
+      await Future.delayed(const Duration(milliseconds: 150));
+      await _obdService.sendCommand('010D\r');
+      await Future.delayed(const Duration(milliseconds: 150));
+      await _obdService.sendCommand('0104\r');
+      await Future.delayed(const Duration(milliseconds: 150));
+      await _obdService.sendCommand('0105\r');
+      await Future.delayed(const Duration(milliseconds: 150));
+      await _obdService.sendCommand('010F\r');
+      await Future.delayed(const Duration(milliseconds: 150));
+      await _obdService.sendCommand('0111\r');
+      await Future.delayed(const Duration(milliseconds: 150));
+      await _obdService.sendCommand('0131\r');
+      await Future.delayed(const Duration(milliseconds: 150));
     }
   }
 
@@ -245,31 +430,55 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       int lastServiceKm = _activeVehicle!['last_oil_change_km'] ?? 0;
       int threshold = _activeVehicle!['oil_change_threshold_km'] ?? 5000;
-      String dateString = _activeVehicle!['last_oil_change_date'] ?? DateTime.now().toIso8601String();
+      String dateString =
+          _activeVehicle!['last_oil_change_date'] ??
+          DateTime.now().toIso8601String();
       DateTime lastServiceDate = DateTime.parse(dateString);
-      
+
       int kmsDriven = currentObdDistance - lastServiceKm;
-      int monthsPassed = DateTime.now().difference(lastServiceDate).inDays ~/ 30;
+      int monthsPassed =
+          DateTime.now().difference(lastServiceDate).inDays ~/ 30;
 
       if (kmsDriven >= threshold || monthsPassed >= 6) {
-        _hasTriggeredMaintenanceAlert = true; 
+        _hasTriggeredMaintenanceAlert = true;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("Maintenance Alert ⚠️: Your ${_activeVehicle!['make']} is due for an oil change!", style: const TextStyle(fontWeight: FontWeight.bold)), 
+            content: Text(
+              "Maintenance Alert ⚠️: Your ${_activeVehicle!['make']} is due for an oil change!",
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
             backgroundColor: Colors.redAccent,
             duration: const Duration(seconds: 10),
-            action: SnackBarAction(label: 'VIEW', textColor: Colors.white, onPressed: () {
-              Navigator.of(context).push(MaterialPageRoute(builder: (context) => MaintenanceScreen(activeVehicle: _activeVehicle!, currentOdometer: _currentDistance)));
-            }),
-          )
+            action: SnackBarAction(
+              label: 'VIEW',
+              textColor: Colors.white,
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => MaintenanceScreen(
+                      activeVehicle: _activeVehicle!,
+                      currentOdometer: _currentDistance,
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
         );
       }
-    } catch (e) { print(e); }
+    } catch (e) {
+      print(e);
+    }
   }
 
   void _handleDemoToggle(bool isEnabled) async {
     if (_activeVehicle == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a vehicle in the garage first.'), backgroundColor: Colors.red));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a vehicle in the garage first.'),
+          backgroundColor: Colors.red,
+        ),
+      );
       return;
     }
 
@@ -282,33 +491,50 @@ class _HomeScreenState extends State<HomeScreen> {
         setState(() => _isConnected = true);
         _startPollingData();
         _startDatabaseLogging();
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Demo Mode Started'), backgroundColor: Colors.amber));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Demo Mode Started'),
+            backgroundColor: Colors.amber,
+          ),
+        );
       }
     } else {
       _isPollingData = false;
       _dbLogTimer?.cancel();
       _obdService.disconnect();
       setState(() => _isConnected = false);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Disconnected')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Disconnected')));
     }
   }
 
   // Shows the actual BT/Wifi Connection UI
   void _showConnectionManager() {
     if (_activeVehicle == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please select a vehicle first.'), backgroundColor: Colors.red));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a vehicle first.'),
+          backgroundColor: Colors.red,
+        ),
+      );
       return;
     }
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: const Color(0xFF1E1E1E),
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (context) => ConnectionManagerSheet(
         obdService: _obdService,
         onConnected: () {
           _setupRealtimeChannel();
-          setState(() { _isConnected = true; _isDemoMode = false; });
+          setState(() {
+            _isConnected = true;
+            _isDemoMode = false;
+          });
           _startPollingData();
           _startDatabaseLogging();
           Navigator.pop(context);
@@ -319,10 +545,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
-    _isPollingData = false; 
-    _dbLogTimer?.cancel(); 
+    _isPollingData = false;
+    _dbLogTimer?.cancel();
     _obdService.disconnect();
-    _telemetryChannel?.unsubscribe(); 
+    _telemetryChannel?.unsubscribe();
     super.dispose();
   }
 
@@ -331,17 +557,22 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
       appBar: AppBar(
-        title: const Text('DriveAI Hub', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: const Text(
+          'DriveAI Hub',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
         backgroundColor: Colors.black,
         actions: [
           IconButton(
             icon: const Icon(Icons.garage, color: Colors.cyan),
             onPressed: () async {
-              final selectedCar = await Navigator.of(context).push(MaterialPageRoute(builder: (context) => const GarageScreen()));
+              final selectedCar = await Navigator.of(context).push(
+                MaterialPageRoute(builder: (context) => const GarageScreen()),
+              );
               if (selectedCar != null && mounted) {
                 setState(() {
                   _activeVehicle = selectedCar as Map<String, dynamic>;
-                  _hasTriggeredMaintenanceAlert = false; 
+                  _hasTriggeredMaintenanceAlert = false;
                 });
               }
             },
@@ -352,9 +583,12 @@ class _HomeScreenState extends State<HomeScreen> {
               _isPollingData = false;
               _obdService.disconnect();
               await supabase.auth.signOut();
-              if (mounted) Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (context) => const AuthScreen()));
+              if (mounted)
+                Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(builder: (context) => const AuthScreen()),
+                );
             },
-          )
+          ),
         ],
       ),
       body: Column(
@@ -373,19 +607,54 @@ class _HomeScreenState extends State<HomeScreen> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text("ACTIVE VEHICLE", style: TextStyle(color: Colors.cyan, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+                    const Text(
+                      "ACTIVE VEHICLE",
+                      style: TextStyle(
+                        color: Colors.cyan,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.5,
+                      ),
+                    ),
                     Row(
                       children: [
-                        Container(width: 8, height: 8, decoration: BoxDecoration(shape: BoxShape.circle, color: _isConnected ? Colors.green : Colors.red)),
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: _isConnected ? Colors.green : Colors.red,
+                          ),
+                        ),
                         const SizedBox(width: 6),
-                        Text(_isConnected ? "CONNECTED" : "DISCONNECTED", style: TextStyle(color: _isConnected ? Colors.green : Colors.red, fontSize: 10, fontWeight: FontWeight.bold)),
+                        Text(
+                          _isConnected ? "CONNECTED" : "DISCONNECTED",
+                          style: TextStyle(
+                            color: _isConnected ? Colors.green : Colors.red,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ],
-                    )
+                    ),
                   ],
                 ),
                 const SizedBox(height: 8),
-                Text(_activeVehicle != null ? "${_activeVehicle!['year']} ${_activeVehicle!['make']} ${_activeVehicle!['model']}" : "No Vehicle Selected", style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-                if (_activeVehicle == null) const Text("Tap the Garage icon in the top right to select a car.", style: TextStyle(color: Colors.white54, fontSize: 12)),
+                Text(
+                  _activeVehicle != null
+                      ? "${_activeVehicle!['year']} ${_activeVehicle!['make']} ${_activeVehicle!['model']}"
+                      : "No Vehicle Selected",
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                if (_activeVehicle == null)
+                  const Text(
+                    "Tap the Garage icon in the top right to select a car.",
+                    style: TextStyle(color: Colors.white54, fontSize: 12),
+                  ),
               ],
             ),
           ),
@@ -393,10 +662,22 @@ class _HomeScreenState extends State<HomeScreen> {
           // 2. The Master Toggle
           Container(
             margin: const EdgeInsets.all(16),
-            decoration: BoxDecoration(color: const Color(0xFF2A2A2A), borderRadius: BorderRadius.circular(12)),
+            decoration: BoxDecoration(
+              color: const Color(0xFF2A2A2A),
+              borderRadius: BorderRadius.circular(12),
+            ),
             child: SwitchListTile(
-              title: const Text("Simulation / Demo Mode", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-              subtitle: const Text("Generate fake OBD data for testing", style: TextStyle(color: Colors.white54, fontSize: 12)),
+              title: const Text(
+                "Simulation / Demo Mode",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              subtitle: const Text(
+                "Generate fake OBD data for testing",
+                style: TextStyle(color: Colors.white54, fontSize: 12),
+              ),
               activeColor: Colors.amber,
               value: _isDemoMode,
               onChanged: _handleDemoToggle,
@@ -412,42 +693,100 @@ class _HomeScreenState extends State<HomeScreen> {
               crossAxisSpacing: 16,
               children: [
                 _buildMenuCard(
-                  title: "Live Telemetry", icon: Icons.speed, color: Colors.cyan,
+                  title: "Live Telemetry",
+                  icon: Icons.speed,
+                  color: Colors.cyan,
                   onTap: () {
-                    if (!_isConnected) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Connect to a vehicle first!'))); return; }
-                    Navigator.of(context).push(MaterialPageRoute(builder: (context) => LiveTelemetryScreen(obdService: _obdService)));
-                  }
+                    if (!_isConnected) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Connect to a vehicle first!'),
+                        ),
+                      );
+                      return;
+                    }
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            LiveTelemetryScreen(obdService: _obdService),
+                      ),
+                    );
+                  },
                 ),
-                // ---> NEW AI MECHANIC BUTTON <---
                 _buildMenuCard(
-                  title: "AI Mechanic", icon: Icons.smart_toy, color: Colors.purpleAccent,
+                  title: "AI Mechanic",
+                  icon: Icons.smart_toy,
+                  color: Colors.purpleAccent,
                   onTap: () {
-                    Navigator.of(context).push(MaterialPageRoute(
-                      builder: (context) => AiMechanicScreen(activeVehicle: _activeVehicle)
-                    ));
-                  }
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) =>
+                            AiMechanicScreen(activeVehicle: _activeVehicle),
+                      ),
+                    );
+                  },
                 ),
                 _buildMenuCard(
-                  title: "Hardware Connect", icon: Icons.bluetooth_connected, color: Colors.blueAccent,
+                  title: "Hardware Connect",
+                  icon: Icons.bluetooth_connected,
+                  color: Colors.blueAccent,
                   onTap: _showConnectionManager,
                 ),
                 _buildMenuCard(
-                  title: "DTC Scan", icon: Icons.car_crash, color: Colors.orange,
+                  title: "DTC Scan",
+                  icon: Icons.car_crash,
+                  color: Colors.orange,
                   onTap: () {
-                    if (_activeVehicle == null) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Select a vehicle first!'))); return; }
-                    Navigator.of(context).push(MaterialPageRoute(builder: (context) => DtcScreen(obdService: _obdService, activeVehicle: _activeVehicle)));
-                  }
+                    if (_activeVehicle == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Select a vehicle first!'),
+                        ),
+                      );
+                      return;
+                    }
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => DtcScreen(
+                          obdService: _obdService,
+                          activeVehicle: _activeVehicle,
+                        ),
+                      ),
+                    );
+                  },
                 ),
                 _buildMenuCard(
-                  title: "Maintenance", icon: Icons.receipt_long, color: Colors.amber,
+                  title: "Maintenance",
+                  icon: Icons.receipt_long,
+                  color: Colors.amber,
                   onTap: () {
-                    if (_activeVehicle == null) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Select a vehicle first!'))); return; }
-                    Navigator.of(context).push(MaterialPageRoute(builder: (context) => MaintenanceScreen(activeVehicle: _activeVehicle!, currentOdometer: _currentDistance)));
-                  }
+                    if (_activeVehicle == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Select a vehicle first!'),
+                        ),
+                      );
+                      return;
+                    }
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => MaintenanceScreen(
+                          activeVehicle: _activeVehicle!,
+                          currentOdometer: _currentDistance,
+                        ),
+                      ),
+                    );
+                  },
                 ),
                 _buildMenuCard(
-                  title: "Safety Systems", icon: Icons.shield, color: Colors.green,
-                  onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (context) => const SafetyScreen()))
+                  title: "Safety Systems",
+                  icon: Icons.shield,
+                  color: Colors.green,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const SafetyScreen(),
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -457,18 +796,41 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildMenuCard({required String title, required IconData icon, required Color color, required VoidCallback onTap}) {
+  Widget _buildMenuCard({
+    required String title,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
       child: Container(
-        decoration: BoxDecoration(color: const Color(0xFF1E1E1E), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withOpacity(0.05))),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1E1E1E),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withOpacity(0.05)),
+        ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle), child: Icon(icon, color: color, size: 36)),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 36),
+            ),
             const SizedBox(height: 16),
-            Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+            Text(
+              title,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
           ],
         ),
       ),
@@ -519,18 +881,36 @@ class _LiveTelemetryScreenState extends State<LiveTelemetryScreen> {
           builder: (context, setModalState) {
             return Column(
               children: [
-                const Padding(padding: EdgeInsets.all(16), child: Text("Customize Dashboard", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold))),
+                const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text(
+                    "Customize Dashboard",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
                 Expanded(
                   child: ListView(
                     children: availableSensors.map((sensor) {
                       bool isSelected = _selectedSensorIds.contains(sensor.id);
                       return CheckboxListTile(
-                        title: Text(sensor.name, style: const TextStyle(color: Colors.white)),
+                        title: Text(
+                          sensor.name,
+                          style: const TextStyle(color: Colors.white),
+                        ),
                         value: isSelected,
                         activeColor: Colors.cyan,
                         onChanged: (val) {
-                          setState(() { if (val == true) _selectedSensorIds.add(sensor.id); else _selectedSensorIds.remove(sensor.id); });
-                          setModalState(() {}); 
+                          setState(() {
+                            if (val == true)
+                              _selectedSensorIds.add(sensor.id);
+                            else
+                              _selectedSensorIds.remove(sensor.id);
+                          });
+                          setModalState(() {});
                         },
                       );
                     }).toList(),
@@ -546,21 +926,35 @@ class _LiveTelemetryScreenState extends State<LiveTelemetryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final activeConfigs = availableSensors.where((s) => _selectedSensorIds.contains(s.id)).toList();
+    final activeConfigs = availableSensors
+        .where((s) => _selectedSensorIds.contains(s.id))
+        .toList();
 
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
       appBar: AppBar(
-        title: const Text('Live Dashboard', style: TextStyle(color: Colors.white)),
+        title: const Text(
+          'Live Dashboard',
+          style: TextStyle(color: Colors.white),
+        ),
         backgroundColor: Colors.black,
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
-          TextButton.icon(icon: const Icon(Icons.tune, color: Colors.cyan), label: const Text("EDIT", style: TextStyle(color: Colors.cyan)), onPressed: _showSensorPicker)
+          TextButton.icon(
+            icon: const Icon(Icons.tune, color: Colors.cyan),
+            label: const Text("EDIT", style: TextStyle(color: Colors.cyan)),
+            onPressed: _showSensorPicker,
+          ),
         ],
       ),
       body: GridView.builder(
         padding: const EdgeInsets.all(16),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, childAspectRatio: 0.9, mainAxisSpacing: 16, crossAxisSpacing: 16),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          childAspectRatio: 0.9,
+          mainAxisSpacing: 16,
+          crossAxisSpacing: 16,
+        ),
         itemCount: activeConfigs.length,
         itemBuilder: (context, index) {
           final config = activeConfigs[index];
@@ -580,19 +974,77 @@ class _LiveTelemetryScreenState extends State<LiveTelemetryScreen> {
   Widget _buildCustomGauge(SensorConfig config, double currentValue) {
     return Container(
       padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(color: const Color(0xFF1E1E1E), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withOpacity(0.05))),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E1E1E),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
+      ),
       child: SfRadialGauge(
-        title: GaugeTitle(text: config.name.toUpperCase(), textStyle: const TextStyle(color: Colors.white54, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
+        title: GaugeTitle(
+          text: config.name.toUpperCase(),
+          textStyle: const TextStyle(
+            color: Colors.white54,
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1,
+          ),
+        ),
         axes: <RadialAxis>[
           RadialAxis(
-            minimum: config.min, maximum: config.max, showLabels: false, showTicks: false,
-            axisLineStyle: const AxisLineStyle(thickness: 0.1, cornerStyle: CornerStyle.bothCurve, color: Color(0xFF2A2A2A), thicknessUnit: GaugeSizeUnit.factor),
+            minimum: config.min,
+            maximum: config.max,
+            showLabels: false,
+            showTicks: false,
+            axisLineStyle: const AxisLineStyle(
+              thickness: 0.1,
+              cornerStyle: CornerStyle.bothCurve,
+              color: Color(0xFF2A2A2A),
+              thicknessUnit: GaugeSizeUnit.factor,
+            ),
             pointers: <GaugePointer>[
-              RangePointer(value: currentValue, width: 0.1, sizeUnit: GaugeSizeUnit.factor, cornerStyle: CornerStyle.bothCurve, gradient: SweepGradient(colors: <Color>[config.color.withOpacity(0.5), config.color], stops: const <double>[0.25, 0.75])),
-              MarkerPointer(value: currentValue, markerType: MarkerType.circle, color: Colors.white, markerHeight: 10, markerWidth: 10),
+              RangePointer(
+                value: currentValue,
+                width: 0.1,
+                sizeUnit: GaugeSizeUnit.factor,
+                cornerStyle: CornerStyle.bothCurve,
+                gradient: SweepGradient(
+                  colors: <Color>[config.color.withOpacity(0.5), config.color],
+                  stops: const <double>[0.25, 0.75],
+                ),
+              ),
+              MarkerPointer(
+                value: currentValue,
+                markerType: MarkerType.circle,
+                color: Colors.white,
+                markerHeight: 10,
+                markerWidth: 10,
+              ),
             ],
             annotations: <GaugeAnnotation>[
-              GaugeAnnotation(positionFactor: 0.1, angle: 90, widget: Column(mainAxisSize: MainAxisSize.min, children: [Text(currentValue.toStringAsFixed(0), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)), Text(config.unit, style: const TextStyle(fontSize: 10, color: Colors.white54))]))
+              GaugeAnnotation(
+                positionFactor: 0.1,
+                angle: 90,
+                widget: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      currentValue.toStringAsFixed(0),
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    Text(
+                      config.unit,
+                      style: const TextStyle(
+                        fontSize: 10,
+                        color: Colors.white54,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ],
@@ -607,7 +1059,11 @@ class _LiveTelemetryScreenState extends State<LiveTelemetryScreen> {
 class ConnectionManagerSheet extends StatefulWidget {
   final OBDService obdService;
   final VoidCallback onConnected;
-  const ConnectionManagerSheet({super.key, required this.obdService, required this.onConnected});
+  const ConnectionManagerSheet({
+    super.key,
+    required this.obdService,
+    required this.onConnected,
+  });
 
   @override
   State<ConnectionManagerSheet> createState() => _ConnectionManagerSheetState();
@@ -617,8 +1073,8 @@ class _ConnectionManagerSheetState extends State<ConnectionManagerSheet> {
   bool _showWifiConfig = false;
   bool _isScanning = false;
   List<BluetoothDevice> _devices = [];
-  final _ipController = TextEditingController(text: "192.168.0.10"); 
-  final _portController = TextEditingController(text: "35000"); 
+  final _ipController = TextEditingController(text: "192.168.0.10");
+  final _portController = TextEditingController(text: "35000");
 
   @override
   void initState() {
@@ -629,10 +1085,14 @@ class _ConnectionManagerSheetState extends State<ConnectionManagerSheet> {
   Future<void> _getPairedDevices() async {
     setState(() => _isScanning = true);
     try {
-      List<BluetoothDevice> devices = await FlutterBluetoothSerial.instance.getBondedDevices();
+      List<BluetoothDevice> devices = await FlutterBluetoothSerial.instance
+          .getBondedDevices();
       setState(() => _devices = devices);
-    } catch (e) { print(e); } 
-    finally { setState(() => _isScanning = false); }
+    } catch (e) {
+      print(e);
+    } finally {
+      setState(() => _isScanning = false);
+    }
   }
 
   @override
@@ -642,15 +1102,82 @@ class _ConnectionManagerSheetState extends State<ConnectionManagerSheet> {
       padding: const EdgeInsets.all(16),
       child: Column(
         children: [
-          const Text("CONNECT SCANNER", style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+          const Text(
+            "CONNECT SCANNER",
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
           const SizedBox(height: 16),
           Row(
             children: [
-              Expanded(child: GestureDetector(onTap: () => setState(() => _showWifiConfig = false), child: Container(padding: const EdgeInsets.symmetric(vertical: 12), decoration: BoxDecoration(color: !_showWifiConfig ? Colors.cyan.withOpacity(0.2) : Colors.transparent, border: Border(bottom: BorderSide(color: !_showWifiConfig ? Colors.cyan : Colors.white24, width: 2))), child: const Center(child: Text("BLUETOOTH", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)))))),
-              Expanded(child: GestureDetector(onTap: () => setState(() => _showWifiConfig = true), child: Container(padding: const EdgeInsets.symmetric(vertical: 12), decoration: BoxDecoration(color: _showWifiConfig ? Colors.cyan.withOpacity(0.2) : Colors.transparent, border: Border(bottom: BorderSide(color: _showWifiConfig ? Colors.cyan : Colors.white24, width: 2))), child: const Center(child: Text("WI-FI", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)))))),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => setState(() => _showWifiConfig = false),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      color: !_showWifiConfig
+                          ? Colors.cyan.withOpacity(0.2)
+                          : Colors.transparent,
+                      border: Border(
+                        bottom: BorderSide(
+                          color: !_showWifiConfig
+                              ? Colors.cyan
+                              : Colors.white24,
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                    child: const Center(
+                      child: Text(
+                        "BLUETOOTH",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => setState(() => _showWifiConfig = true),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                      color: _showWifiConfig
+                          ? Colors.cyan.withOpacity(0.2)
+                          : Colors.transparent,
+                      border: Border(
+                        bottom: BorderSide(
+                          color: _showWifiConfig ? Colors.cyan : Colors.white24,
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                    child: const Center(
+                      child: Text(
+                        "WI-FI",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
-          Expanded(child: _showWifiConfig ? _buildWifiConfig() : _buildBluetoothScanner()),
+          Expanded(
+            child: _showWifiConfig
+                ? _buildWifiConfig()
+                : _buildBluetoothScanner(),
+          ),
         ],
       ),
     );
@@ -659,23 +1186,54 @@ class _ConnectionManagerSheetState extends State<ConnectionManagerSheet> {
   Widget _buildBluetoothScanner() {
     return Column(
       children: [
-        if (_isScanning) const Padding(padding: EdgeInsets.all(8.0), child: CircularProgressIndicator(color: Colors.cyan)),
+        if (_isScanning)
+          const Padding(
+            padding: EdgeInsets.all(8.0),
+            child: CircularProgressIndicator(color: Colors.cyan),
+          ),
         Expanded(
           child: ListView.builder(
             itemCount: _devices.length,
             itemBuilder: (context, index) {
               return ListTile(
-                leading: const CircleAvatar(backgroundColor: Color(0xFF2A2A2A), child: Icon(Icons.bluetooth, color: Colors.cyan)),
-                title: Text(_devices[index].name ?? "Unknown", style: const TextStyle(color: Colors.white)),
-                subtitle: Text(_devices[index].address, style: const TextStyle(color: Colors.white54)),
+                leading: const CircleAvatar(
+                  backgroundColor: Color(0xFF2A2A2A),
+                  child: Icon(Icons.bluetooth, color: Colors.cyan),
+                ),
+                title: Text(
+                  _devices[index].name ?? "Unknown",
+                  style: const TextStyle(color: Colors.white),
+                ),
+                subtitle: Text(
+                  _devices[index].address,
+                  style: const TextStyle(color: Colors.white54),
+                ),
                 trailing: ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.cyan),
-                  child: const Text("Pair", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                  child: const Text(
+                    "Pair",
+                    style: TextStyle(
+                      color: Colors.black,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                   onPressed: () async {
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Connecting...')));
-                    bool success = await widget.obdService.connectToBluetooth(_devices[index]);
-                    if (success) { widget.onConnected(); } 
-                    else { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Connection failed.'), backgroundColor: Colors.red)); }
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Connecting...')),
+                    );
+                    bool success = await widget.obdService.connectToBluetooth(
+                      _devices[index],
+                    );
+                    if (success) {
+                      widget.onConnected();
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Connection failed.'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
                   },
                 ),
               );
@@ -693,21 +1251,74 @@ class _ConnectionManagerSheetState extends State<ConnectionManagerSheet> {
         children: [
           Row(
             children: [
-              Expanded(flex: 2, child: TextField(controller: _ipController, style: const TextStyle(color: Colors.white), decoration: InputDecoration(labelText: 'IP Address', labelStyle: const TextStyle(color: Colors.cyan), filled: true, fillColor: const Color(0xFF2A2A2A), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))))),
+              Expanded(
+                flex: 2,
+                child: TextField(
+                  controller: _ipController,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    labelText: 'IP Address',
+                    labelStyle: const TextStyle(color: Colors.cyan),
+                    filled: true,
+                    fillColor: const Color(0xFF2A2A2A),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ),
               const SizedBox(width: 16),
-              Expanded(flex: 1, child: TextField(controller: _portController, keyboardType: TextInputType.number, style: const TextStyle(color: Colors.white), decoration: InputDecoration(labelText: 'Port', labelStyle: const TextStyle(color: Colors.cyan), filled: true, fillColor: const Color(0xFF2A2A2A), border: OutlineInputBorder(borderRadius: BorderRadius.circular(8))))),
+              Expanded(
+                flex: 1,
+                child: TextField(
+                  controller: _portController,
+                  keyboardType: TextInputType.number,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
+                    labelText: 'Port',
+                    labelStyle: const TextStyle(color: Colors.cyan),
+                    filled: true,
+                    fillColor: const Color(0xFF2A2A2A),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 30),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.cyan, minimumSize: const Size(double.infinity, 50)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.cyan,
+              minimumSize: const Size(double.infinity, 50),
+            ),
             onPressed: () async {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Connecting...')));
-              bool success = await widget.obdService.connectToWiFi(_ipController.text.trim(), int.parse(_portController.text.trim()));
-              if (success) { widget.onConnected(); } 
-              else { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Connection failed.'), backgroundColor: Colors.red)); }
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(content: Text('Connecting...')));
+              bool success = await widget.obdService.connectToWiFi(
+                _ipController.text.trim(),
+                int.parse(_portController.text.trim()),
+              );
+              if (success) {
+                widget.onConnected();
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Connection failed.'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
             },
-            child: const Text("CONNECT", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+            child: const Text(
+              "CONNECT",
+              style: TextStyle(
+                color: Colors.black,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ),
         ],
       ),
@@ -715,43 +1326,263 @@ class _ConnectionManagerSheetState extends State<ConnectionManagerSheet> {
   }
 }
 
-
 // ==========================================
-// 6. AI MECHANIC CHAT SCREEN (Placeholder)
+// 6. AI MECHANIC CHAT SCREEN
 // ==========================================
-class AiMechanicScreen extends StatelessWidget {
+class AiMechanicScreen extends StatefulWidget {
   final Map<String, dynamic>? activeVehicle;
 
   const AiMechanicScreen({super.key, this.activeVehicle});
+
+  @override
+  State<AiMechanicScreen> createState() => _AiMechanicScreenState();
+}
+
+class _AiMechanicScreenState extends State<AiMechanicScreen> {
+  final TextEditingController _chatController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+  final List<Map<String, String>> _messages = [];
+  bool _isTyping = false;
+
+  @override
+  void initState() {
+    super.initState();
+    String carName = widget.activeVehicle != null
+        ? "${widget.activeVehicle!['year']} ${widget.activeVehicle!['make']}"
+        : "your vehicle";
+
+    _messages.add({
+      'role': 'ai',
+      'text':
+          "Hello! I am your AI Mechanic. How can I help you with $carName today?\n\n(میں آپ کا اے آئی مکینک ہوں۔ میں آج آپ کی گاڑی کے ساتھ کیا مدد کر سکتا ہوں؟)",
+    });
+  }
+
+  Future<void> _sendMessage(String text) async {
+    if (text.trim().isEmpty) return;
+
+    setState(() {
+      _messages.add({'role': 'user', 'text': text});
+      _isTyping = true;
+    });
+
+    _chatController.clear();
+    _scrollToBottom();
+
+    String carContext = widget.activeVehicle != null
+        ? "Vehicle: ${widget.activeVehicle!['year']} ${widget.activeVehicle!['make']} ${widget.activeVehicle!['model']}."
+        : "No specific vehicle selected.";
+
+    try {
+      // REPLACE with your FastAPI server's actual IP address!
+      final url = Uri.parse('http://192.168.100.25:8000/chat');
+
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'prompt': text, 'context': carContext}),
+      );
+
+      if (response.statusCode == 200) {
+        final responseData = json.decode(response.body);
+        setState(() {
+          _isTyping = false;
+          _messages.add({
+            'role': 'ai',
+            'text':
+                responseData['response'] ??
+                "I received a response, but couldn't read the text.",
+          });
+        });
+      } else {
+        setState(() {
+          _isTyping = false;
+          _messages.add({
+            'role': 'ai',
+            'text':
+                "Server Error: ${response.statusCode}. Make sure the Python backend is running!",
+          });
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _isTyping = false;
+        _messages.add({
+          'role': 'ai',
+          'text':
+              "Network Error: Could not connect to the backend. Is your FastAPI server running? ($e)",
+        });
+      });
+    }
+
+    _scrollToBottom();
+  }
+
+  void _scrollToBottom() {
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
       appBar: AppBar(
-        title: const Text('AI Mechanic', style: TextStyle(color: Colors.white)),
-        backgroundColor: Colors.black,
-        iconTheme: const IconThemeData(color: Colors.white),
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+        title: const Row(
           children: [
-            const Icon(Icons.smart_toy, size: 80, color: Colors.purpleAccent),
-            const SizedBox(height: 20),
-            const Text(
-              "AI Mechanic Chat", 
-              style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)
-            ),
-            const SizedBox(height: 10),
+            Icon(Icons.smart_toy, color: Colors.purpleAccent),
+            SizedBox(width: 10),
             Text(
-              activeVehicle != null 
-                  ? "Ready to diagnose your ${activeVehicle!['make']}..." 
-                  : "Please select a vehicle first.",
-              style: const TextStyle(color: Colors.white54),
+              'AI Mechanic',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ],
         ),
+        backgroundColor: Colors.black,
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: ListView.builder(
+              controller: _scrollController,
+              padding: const EdgeInsets.all(16),
+              itemCount: _messages.length,
+              itemBuilder: (context, index) {
+                final msg = _messages[index];
+                final isUser = msg['role'] == 'user';
+                return _buildChatBubble(msg['text']!, isUser);
+              },
+            ),
+          ),
+
+          if (_isTyping)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  "AI is thinking...",
+                  style: TextStyle(
+                    color: Colors.purpleAccent,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ),
+            ),
+
+          SizedBox(
+            height: 50,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              children: [
+                _buildQuickActionChip("اس کے اسباب کیا ہیں؟ (Causes)"),
+                _buildQuickActionChip("اسے کیسے ٹھیک کریں؟ (How to fix)"),
+                _buildQuickActionChip("کیا یہ محفوظ ہے؟ (Is it safe?)"),
+                _buildQuickActionChip("Estimated Repair Cost"),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: const BoxDecoration(
+              color: Color(0xFF1E1E1E),
+              border: Border(top: BorderSide(color: Colors.white12)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _chatController,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      hintText: "Ask about a noise, code, or issue...",
+                      hintStyle: const TextStyle(color: Colors.white54),
+                      filled: true,
+                      fillColor: Colors.black,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 10,
+                      ),
+                    ),
+                    onSubmitted: _sendMessage,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  decoration: const BoxDecoration(
+                    color: Colors.purpleAccent,
+                    shape: BoxShape.circle,
+                  ),
+                  child: IconButton(
+                    icon: const Icon(Icons.send, color: Colors.white),
+                    onPressed: () => _sendMessage(_chatController.text),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildChatBubble(String text, bool isUser) {
+    return Align(
+      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.75,
+        ),
+        decoration: BoxDecoration(
+          color: isUser
+              ? Colors.cyan.withOpacity(0.2)
+              : const Color(0xFF2A2A2A),
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(16),
+            topRight: const Radius.circular(16),
+            bottomLeft: isUser ? const Radius.circular(16) : Radius.zero,
+            bottomRight: isUser ? Radius.zero : const Radius.circular(16),
+          ),
+          border: Border.all(
+            color: isUser ? Colors.cyan.withOpacity(0.5) : Colors.white12,
+          ),
+        ),
+        child: Text(
+          text,
+          style: const TextStyle(color: Colors.white, fontSize: 15),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuickActionChip(String label) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8.0),
+      child: ActionChip(
+        backgroundColor: const Color(0xFF2A2A2A),
+        side: const BorderSide(color: Colors.purpleAccent),
+        label: Text(label, style: const TextStyle(color: Colors.white)),
+        onPressed: () => _sendMessage(label),
       ),
     );
   }
