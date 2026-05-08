@@ -301,6 +301,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:math'; 
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 
 class OBDService {
@@ -502,8 +503,7 @@ class OBDService {
       }
     }
 
-    // ---> NEW: Distance Traveled Since Codes Cleared (PID 31) <---
-    // Formula: (A * 256) + B (Returns value in kilometers)
+    // Distance Traveled Since Codes Cleared (PID 31) -> Formula: (A * 256) + B
     else if (response.startsWith("41 31") || response.startsWith("4131")) {
       List<String> parts = _splitHex(response, "41 31");
       if (parts.length >= 2) {
@@ -563,7 +563,6 @@ class OBDService {
 
   void _parseDTCResponse(String response) {
     // A simplified DTC parser for FYP scope.
-    // Real DTC parsing requires bitwise operations to extract P, C, B, U prefixes.
     String cleanResponse = response.replaceAll(' ', '');
     if (cleanResponse.length > 2) {
       String data = cleanResponse.substring(2);
@@ -572,7 +571,6 @@ class OBDService {
         if (i + 4 <= data.length) {
           String rawHex = data.substring(i, i + 4);
           if (rawHex != "0000") {
-            // Very basic prefix assumption for testing (Assume Powertrain 'P')
             codes.add("P${rawHex.substring(1)}"); 
           }
         }
@@ -582,33 +580,59 @@ class OBDService {
   }
 
   // ==========================================
-  // 5. DEVELOPER SIMULATION ENGINE
+  // 5. DEVELOPER SIMULATION ENGINE (DYNAMIC)
   // ==========================================
+
+  int _simRpmBase = 2500;
+  int _simSpeedBase = 60;
+  final Random _random = Random();
 
   void _generateSimulatedResponse(String command) {
     String mockResponse = "";
     String cmd = command.replaceAll('\r', '');
 
     if (cmd == "010C") {
-      // Fake RPM: ~2500 RPM (Hex: 41 0C 27 10 -> (39*256 + 16)/4 = 2500)
-      mockResponse = "41 0C 27 10>";
+      // RPM: Fluctuate between roughly 800 and 4000
+      _simRpmBase += _random.nextInt(200) - 100; 
+      if (_simRpmBase < 800) _simRpmBase = 800; // Idle limit
+      if (_simRpmBase > 4000) _simRpmBase = 4000;
+      
+      int value = _simRpmBase * 4;
+      int a = value ~/ 256;
+      int b = value % 256;
+      mockResponse = "41 0C ${a.toRadixString(16).padLeft(2, '0').toUpperCase()} ${b.toRadixString(16).padLeft(2, '0').toUpperCase()}>";
+      
     } else if (cmd == "010D") {
-      // Fake Speed: 60 km/h (Hex 3C)
-      mockResponse = "41 0D 3C>";
+      // Speed: Fluctuate slightly
+      _simSpeedBase += _random.nextInt(5) - 2;
+      if (_simSpeedBase < 0) _simSpeedBase = 0;
+      if (_simSpeedBase > 120) _simSpeedBase = 120;
+      mockResponse = "41 0D ${_simSpeedBase.toRadixString(16).padLeft(2, '0').toUpperCase()}>";
+      
     } else if (cmd == "0104") {
-      // Fake Load: ~40% (Hex 66)
-      mockResponse = "41 04 66>";
+      // Load: Fluctuate 30-50%
+      int load = 30 + _random.nextInt(20);
+      int a = (load * 255) ~/ 100;
+      mockResponse = "41 04 ${a.toRadixString(16).padLeft(2, '0').toUpperCase()}>";
+      
     } else if (cmd == "0105") {
-      // Fake Coolant: 90C (Hex 82 -> 130 - 40 = 90)
-      mockResponse = "41 05 82>";
+      // Coolant: Fluctuates slowly around 85-95C
+      int temp = 85 + _random.nextInt(10);
+      int a = temp + 40;
+      mockResponse = "41 05 ${a.toRadixString(16).padLeft(2, '0').toUpperCase()}>";
+      
     } else if (cmd == "010F") {
-      // Fake Intake: 35C (Hex 4B -> 75 - 40 = 35)
+      // Intake: Constant 35C
       mockResponse = "41 0F 4B>";
+      
     } else if (cmd == "0111") {
-      // Fake Throttle: ~25% (Hex 40)
-      mockResponse = "41 11 40>";
+      // Throttle: Fluctuate 10-30%
+      int throttle = 10 + _random.nextInt(20);
+      int a = (throttle * 255) ~/ 100;
+      mockResponse = "41 11 ${a.toRadixString(16).padLeft(2, '0').toUpperCase()}>";
+      
     } else if (cmd == "0131") {
-      // Fake Distance Since Codes Cleared: 5120 km (Hex 14 00)
+      // Distance: 5120 km (Hex 14 00)
       mockResponse = "41 31 14 00>";
     }
 
