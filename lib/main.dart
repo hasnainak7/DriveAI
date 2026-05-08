@@ -33,7 +33,7 @@ class MyApp extends StatelessWidget {
       // Automatically route based on whether a session exists
       home: supabase.auth.currentSession == null
           ? const AuthScreen()
-          : const DashboardScreen(),
+          : const HomeScreen(),
     );
   }
 }
