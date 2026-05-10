@@ -14,6 +14,8 @@ import 'garage_screen.dart';
 import 'dtc_screen.dart';
 import 'safety_screen.dart';
 import 'maintenance_screen.dart';
+import 'safety_engine.dart';
+import 'trip_screen.dart'; // <--- ADD THIS LINE
 
 // ==========================================
 // 1. DATA MODELS
@@ -333,6 +335,16 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _requestPermissions();
+
+    // ---> START GLOBAL SAFETY ENGINE <---
+    SafetyEngine().initializeEngine().then((_) {
+      SafetyEngine().startMonitoring();
+    });
+
+    // Master Background Listener for OBD
+    _obdService.obdDataStream.listen((data) {
+      // ... your existing code ...
+    });
 
     // Master Background Listener
     _obdService.obdDataStream.listen((data) {
@@ -714,6 +726,22 @@ class _HomeScreenState extends State<HomeScreen> {
                   },
                 ),
                 _buildMenuCard(
+                  title: "Trip Logger",
+                  icon: Icons.map_outlined,
+                  color: Colors.lightGreenAccent,
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => TripScreen(
+                          obdService: _obdService,
+                          activeVehicle: _activeVehicle,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+
+                _buildMenuCard(
                   title: "AI Mechanic",
                   icon: Icons.smart_toy,
                   color: Colors.purpleAccent,
@@ -768,6 +796,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       );
                       return;
                     }
+
                     Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (context) => MaintenanceScreen(

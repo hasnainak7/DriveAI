@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'dart:math'; 
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
+import 'package:http/http.dart' as http; // <--- NEW ML IMPORT
 
 class OBDService {
   // Connections
@@ -23,6 +24,18 @@ class OBDService {
       (_bluetoothConnection != null && _bluetoothConnection!.isConnected) || 
       _wifiSocket != null || 
       _isSimulating;
+
+  // ==========================================
+  // 6. ML ENGINE STATE (NEW)
+  // ==========================================
+  Timer? _mlAnalysisTimer;
+  
+  double currentRpm = 0;
+  double currentSpeed = 0;
+  double currentLoad = 0;
+  double currentCoolant = 90; // Default normal temp
+  double currentIntake = 30;
+  double currentThrottle = 15;
 
   // ==========================================
   // 1. HARDWARE CONNECTIONS
@@ -75,6 +88,8 @@ class OBDService {
   }
 
   void disconnect() {
+    stopMLAnalysisEngine(); // Stop ML when disconnected
+
     _bluetoothConnection?.dispose();
     _bluetoothConnection = null;
     
@@ -155,7 +170,9 @@ class OBDService {
       if (parts.length >= 2) {
         int a = int.parse(parts[0], radix: 16);
         int b = int.parse(parts[1], radix: 16);
-        _obdDataController.add({'type': 'RPM', 'value': ((a * 256) + b) ~/ 4});
+        int rpm = ((a * 256) + b) ~/ 4;
+        currentRpm = rpm.toDouble(); // Save for ML
+        _obdDataController.add({'type': 'RPM', 'value': rpm});
       }
     }
     
@@ -164,6 +181,7 @@ class OBDService {
       List<String> parts = _splitHex(response, "41 0D");
       if (parts.isNotEmpty) {
         int a = int.parse(parts[0], radix: 16);
+        currentSpeed = a.toDouble(); // Save for ML
         _obdDataController.add({'type': 'SPEED', 'value': a});
       }
     }
@@ -173,7 +191,9 @@ class OBDService {
       List<String> parts = _splitHex(response, "41 04");
       if (parts.isNotEmpty) {
         int a = int.parse(parts[0], radix: 16);
-        _obdDataController.add({'type': 'LOAD', 'value': (a * 100) ~/ 255});
+        int load = (a * 100) ~/ 255;
+        currentLoad = load.toDouble(); // Save for ML
+        _obdDataController.add({'type': 'LOAD', 'value': load});
       }
     }
     
@@ -182,7 +202,9 @@ class OBDService {
       List<String> parts = _splitHex(response, "41 05");
       if (parts.isNotEmpty) {
         int a = int.parse(parts[0], radix: 16);
-        _obdDataController.add({'type': 'COOLANT', 'value': a - 40});
+        int coolant = a - 40;
+        currentCoolant = coolant.toDouble(); // Save for ML
+        _obdDataController.add({'type': 'COOLANT', 'value': coolant});
       }
     }
 
@@ -191,7 +213,9 @@ class OBDService {
       List<String> parts = _splitHex(response, "41 0F");
       if (parts.isNotEmpty) {
         int a = int.parse(parts[0], radix: 16);
-        _obdDataController.add({'type': 'INTAKE', 'value': a - 40});
+        int intake = a - 40;
+        currentIntake = intake.toDouble(); // Save for ML
+        _obdDataController.add({'type': 'INTAKE', 'value': intake});
       }
     }
 
@@ -200,7 +224,9 @@ class OBDService {
       List<String> parts = _splitHex(response, "41 11");
       if (parts.isNotEmpty) {
         int a = int.parse(parts[0], radix: 16);
-        _obdDataController.add({'type': 'THROTTLE', 'value': (a * 100) ~/ 255});
+        int throttle = (a * 100) ~/ 255;
+        currentThrottle = throttle.toDouble(); // Save for ML
+        _obdDataController.add({'type': 'THROTTLE', 'value': throttle});
       }
     }
 
@@ -221,7 +247,6 @@ class OBDService {
     }
   }
 
-  // Helper to clean up ELM327 hex strings whether they have spaces or not
   List<String> _splitHex(String response, String prefix) {
     String cleanResponse = response.replaceAll(' ', '');
     String cleanPrefix = prefix.replaceAll(' ', '');
@@ -263,7 +288,6 @@ class OBDService {
   }
 
   void _parseDTCResponse(String response) {
-    // A simplified DTC parser for FYP scope.
     String cleanResponse = response.replaceAll(' ', '');
     if (cleanResponse.length > 2) {
       String data = cleanResponse.substring(2);
@@ -293,9 +317,8 @@ class OBDService {
     String cmd = command.replaceAll('\r', '');
 
     if (cmd == "010C") {
-      // RPM: Fluctuate between roughly 800 and 4000
       _simRpmBase += _random.nextInt(200) - 100; 
-      if (_simRpmBase < 800) _simRpmBase = 800; // Idle limit
+      if (_simRpmBase < 800) _simRpmBase = 800;
       if (_simRpmBase > 4000) _simRpmBase = 4000;
       
       int value = _simRpmBase * 4;
@@ -304,44 +327,105 @@ class OBDService {
       mockResponse = "41 0C ${a.toRadixString(16).padLeft(2, '0').toUpperCase()} ${b.toRadixString(16).padLeft(2, '0').toUpperCase()}>";
       
     } else if (cmd == "010D") {
-      // Speed: Fluctuate slightly
       _simSpeedBase += _random.nextInt(5) - 2;
       if (_simSpeedBase < 0) _simSpeedBase = 0;
       if (_simSpeedBase > 120) _simSpeedBase = 120;
       mockResponse = "41 0D ${_simSpeedBase.toRadixString(16).padLeft(2, '0').toUpperCase()}>";
       
     } else if (cmd == "0104") {
-      // Load: Fluctuate 30-50%
       int load = 30 + _random.nextInt(20);
       int a = (load * 255) ~/ 100;
       mockResponse = "41 04 ${a.toRadixString(16).padLeft(2, '0').toUpperCase()}>";
       
     } else if (cmd == "0105") {
-      // Coolant: Fluctuates slowly around 85-95C
       int temp = 85 + _random.nextInt(10);
       int a = temp + 40;
       mockResponse = "41 05 ${a.toRadixString(16).padLeft(2, '0').toUpperCase()}>";
       
     } else if (cmd == "010F") {
-      // Intake: Constant 35C
       mockResponse = "41 0F 4B>";
       
     } else if (cmd == "0111") {
-      // Throttle: Fluctuate 10-30%
       int throttle = 10 + _random.nextInt(20);
       int a = (throttle * 255) ~/ 100;
       mockResponse = "41 11 ${a.toRadixString(16).padLeft(2, '0').toUpperCase()}>";
       
     } else if (cmd == "0131") {
-      // Distance: 5120 km (Hex 14 00)
       mockResponse = "41 31 14 00>";
     }
 
     if (mockResponse.isNotEmpty) {
-      // Simulate hardware delay
       Future.delayed(const Duration(milliseconds: 50), () {
         _handleRawData(mockResponse);
       });
+    }
+  }
+
+  // ==========================================
+  // 6. MACHINE LEARNING INTEGRATION (NEW)
+  // ==========================================
+
+  void startMLAnalysisEngine() {
+    if (!isConnected) return;
+    print("Starting Background ML Analysis...");
+    
+    // Send a snapshot to the Python server every 10 seconds
+    _mlAnalysisTimer?.cancel();
+    _mlAnalysisTimer = Timer.periodic(const Duration(seconds: 10), (timer) async {
+      await _runAIAnalysis();
+    });
+  }
+
+  void stopMLAnalysisEngine() {
+    _mlAnalysisTimer?.cancel();
+    print("Stopped Background ML Analysis.");
+  }
+
+  Future<void> _runAIAnalysis() async {
+    // ⚠️ IMPORTANT: Verify this IP matches your FastAPI laptop IP!
+    final url = Uri.parse('http://192.168.100.121:8000/analyze'); 
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          "rpm": currentRpm,
+          "speed": currentSpeed,
+          "load": currentLoad,
+          "coolant": currentCoolant,
+          "intake": currentIntake,
+          "throttle": currentThrottle
+        }),
+      ).timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200) {
+        final result = jsonDecode(response.body);
+        
+        bool isAnomaly = result['is_anomaly'];
+        List<dynamic> warnings = result['warnings'];
+        String diagnosis = result['ai_diagnosis'];
+        int score = result['behavior_score'] ?? 100;
+
+        if (isAnomaly || warnings.isNotEmpty) {
+          print("🚨 ML ANOMALY DETECTED: $diagnosis");
+          // Broadcast to the UI stream so your frontend can show a popup!
+          _obdDataController.add({
+            'type': 'ML_ALERT', 
+            'message': diagnosis,
+            'score': score
+          });
+        } else {
+          print("✅ ML Check Passed. Engine Health Score: $score");
+          // You can also broadcast healthy scores to update a UI gauge
+          _obdDataController.add({
+            'type': 'ML_HEALTH',
+            'score': score
+          });
+        }
+      }
+    } catch (e) {
+      print("ML Analysis Connection Error: $e");
     }
   }
 }

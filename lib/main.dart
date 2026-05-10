@@ -7,6 +7,8 @@ const supabaseUrl = 'https://jwyjutleaymzbkeucwkl.supabase.co';
 const supabaseAnonKey =
     'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp3eWp1dGxlYXltemJrZXVjd2tsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwNzAyODEsImV4cCI6MjA5MjY0NjI4MX0.4Gzie8ZbXwCjEOZk7KqlBrlQVstjUL6rjUcCbYvi0cE';
 
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -25,11 +27,15 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'AI Diagnostic',
       theme: ThemeData(
         brightness: Brightness.dark,
         primarySwatch: Colors.blue,
       ),
+
+ 
+
       // Automatically route based on whether a session exists
       home: supabase.auth.currentSession == null
           ? const AuthScreen()
