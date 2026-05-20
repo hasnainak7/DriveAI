@@ -1,0 +1,79 @@
+appId: com.example.ai_diagnostic_app
+---
+- launchApp
+- takeScreenshot: "01_Dashboard_Screen"
+
+# 2. Click on AI Mechanic Card and check its functionality
+- tapOn: "AI Mechanic"
+- takeScreenshot: "02_AI_Mechanic_Screen"
+- back
+
+# 3. Live Telemetry Data Verification (condition check)
+- tapOn: "Live Telemetry"
+- takeScreenshot: "03_Live_Telemetry_Dashboard"
+
+# 4. Click on Trip Logger and check its functionality
+- tapOn:
+    point: "75%,40%"
+- takeScreenshot: "04_Trip_Logger_Screen"
+- back
+
+# 5. Maintenance Logs Screen(condition check)
+- tapOn: "Maintenance"
+- takeScreenshot: "05_Maintenance_Logs"
+
+# 6.Mechanic Portal Screen
+- assertVisible: "AI Mechanic"
+- takeScreenshot: "06_Mechanic_Portal_Sync_Active"
+
+
+# appId: com.example.ai_diagnostic_app
+# ---
+# - launchApp
+# - takeScreenshot: "01_Dashboard_Locked"
+
+# # ===================================================
+# #  GARAGE SELECTION & DEMO MODE ACTIVATE
+# # ===================================================
+
+# # Directly click on the Garage/Car icon located at the top right.
+# - tapOn:
+#     point: "80%,6%" # Exact position of Highlighted garage icon
+# - takeScreenshot: "02_Garage_Screen_Open"
+
+# # Click on the car card present on the "My Garage" screen.
+# - tapOn:
+#     point: "50%,16%"
+# - takeScreenshot: "03_Vehicle_Selected_Success"
+
+# # TOGGLE CLICK: 
+# - tapOn:
+#     point: "80%,27%"
+# - takeScreenshot: "04_Demo_Mode_Activated_Dashboard_Unlocked"
+
+# ============================================
+# 7. EDGE AI SAFETY MODULE & CRASH SIMULATION 
+# =============================================
+
+#1 Click on Safety Systems
+- scroll
+- tapOn: "Safety Systems"
+- takeScreenshot: "08_Edge_AI_Safety_Screen"
+
+# # ALERT CLEARING METHOD:
+# # Click on "VIEW" text on notification
+# - tapOn: "VIEW"
+# - takeScreenshot: "08_B_Maintenance_Screen_Opened"
+
+# # Now back to Edge AI Safety Module Screen
+# - back
+
+# 2. SIMULATE CRASH
+- tapOn: "SIMULATE CRASH"
+- takeScreenshot: "09_Crash_Simulated_PopUp"
+
+# 3. CANCEL SOS
+- tapOn: "I AM OKAY - CANCEL SOS"
+- takeScreenshot: "10_SOS_Canceled_Safe"
+- back
+    

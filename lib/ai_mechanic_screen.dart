@@ -19,7 +19,10 @@ class _AiMechanicScreenState extends State<AiMechanicScreen> {
   bool _isLoading = false;
   
   // REMEMBER TO KEEP YOUR CORRECT IP ADDRESS HERE!
-  final String _apiUrl = "http://192.168.100.25:8000/mechanic/chat"; 
+  // final String _apiUrl = "http://192.168.100.25:8000/mechanic/chat";   //Home Network
+  // final String _apiUrl = "http://192.168.120.166:8000/mechanic/chat";
+  final String _apiUrl = "https://ai-mechanic-backend.onrender.com/mechanic/chat";
+  
 
   // Pre-defined Quick Action Questions
   final List<String> _suggestedQuestions = [

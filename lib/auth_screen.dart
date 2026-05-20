@@ -5,8 +5,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:syncfusion_flutter_gauges/gauges.dart';
-import 'package:http/http.dart' as http; // For the AI Mechanic API
-
+import 'package:http/http.dart' as http;
+import 'package:speech_to_text/speech_to_text.dart' as stt;
+import 'package:flutter_tts/flutter_tts.dart';
 // Your custom file imports
 import 'main.dart';
 import 'obd_service.dart';
@@ -15,7 +16,8 @@ import 'dtc_screen.dart';
 import 'safety_screen.dart';
 import 'maintenance_screen.dart';
 import 'safety_engine.dart';
-import 'trip_screen.dart'; // <--- ADD THIS LINE
+import 'trip_screen.dart';
+import 'mechanic_portal_screen.dart';
 
 // ==========================================
 // 1. DATA MODELS
@@ -89,6 +91,8 @@ final List<SensorConfig> availableSensors = [
   ),
 ];
 
+
+
 // ==========================================
 // 2. THE AUTHENTICATION SCREEN
 // ==========================================
@@ -107,6 +111,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
   bool _isLogin = true;
   bool _isLoading = false;
+  String _selectedRole = 'driver'; // Default role
 
   @override
   void dispose() {
@@ -127,30 +132,37 @@ class _AuthScreenState extends State<AuthScreen> {
           password: _passwordController.text.trim(),
         );
       } else {
+        // Sign Up with Role Metadata
         await supabase.auth.signUp(
           email: _emailController.text.trim(),
           password: _passwordController.text.trim(),
-          data: {'full_name': _usernameController.text.trim()},
+          data: {
+            'full_name': _usernameController.text.trim(),
+            'role': _selectedRole, // 'driver' or 'mechanic'
+          },
         );
       }
 
-      if (mounted)
+      if (mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (context) => const HomeScreen()),
         );
+      }
     } on AuthException catch (error) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(error.message), backgroundColor: Colors.red),
         );
+      }
     } catch (error) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('An unexpected error occurred'),
             backgroundColor: Colors.red,
           ),
         );
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -183,6 +195,81 @@ class _AuthScreenState extends State<AuthScreen> {
                   const SizedBox(height: 40),
 
                   if (!_isLogin) ...[
+                    const Text(
+                      'I AM A...',
+                      style: TextStyle(color: Colors.white70),
+                    ),
+                    const SizedBox(height: 8),
+                    // ROLE SELECTION UI
+                    Row(
+                      children: [
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () =>
+                                setState(() => _selectedRole = 'driver'),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              decoration: BoxDecoration(
+                                color: _selectedRole == 'driver'
+                                    ? Colors.cyan
+                                    : const Color(0xFF1E1E1E),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: _selectedRole == 'driver'
+                                      ? Colors.cyan
+                                      : Colors.white24,
+                                ),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  'DRIVER',
+                                  style: TextStyle(
+                                    color: _selectedRole == 'driver'
+                                        ? Colors.black
+                                        : Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () =>
+                                setState(() => _selectedRole = 'mechanic'),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                              decoration: BoxDecoration(
+                                color: _selectedRole == 'mechanic'
+                                    ? Colors.cyan
+                                    : const Color(0xFF1E1E1E),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: _selectedRole == 'mechanic'
+                                      ? Colors.cyan
+                                      : Colors.white24,
+                                ),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  'MECHANIC',
+                                  style: TextStyle(
+                                    color: _selectedRole == 'mechanic'
+                                        ? Colors.black
+                                        : Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+
                     const Text(
                       'USERNAME',
                       style: TextStyle(color: Colors.white70),
@@ -219,9 +306,20 @@ class _AuthScreenState extends State<AuthScreen> {
                         borderRadius: BorderRadius.circular(8),
                       ),
                     ),
-                    validator: (value) => value!.isEmpty || !value.contains('@')
-                        ? 'Enter a valid email'
-                        : null,
+                    // ---> NEW REGEX VALIDATION APPLIED HERE <---
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Please enter your email';
+                      }
+                      
+                      final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
+                      
+                      if (!emailRegex.hasMatch(value.trim())) {
+                        return 'Enter a valid email (e.g., name@domain.com)';
+                      }
+                      
+                      return null;
+                    },
                   ),
                   const SizedBox(height: 20),
 
@@ -265,7 +363,7 @@ class _AuthScreenState extends State<AuthScreen> {
                             style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
-                              color: Colors.white,
+                              color: Colors.black,
                             ),
                           ),
                         ),
@@ -341,14 +439,14 @@ class _HomeScreenState extends State<HomeScreen> {
       SafetyEngine().startMonitoring();
     });
 
-    // Master Background Listener for OBD
-    _obdService.obdDataStream.listen((data) {
-      // ... your existing code ...
-    });
-
     // Master Background Listener
     _obdService.obdDataStream.listen((data) {
       if (mounted) {
+        // ---> 1. THE ML ALERT LISTENER <---
+        if (data['type'] == 'ML_ALERT') {
+          _showAIWarningPopup(data['message'], data['score']);
+        }
+
         if (data['type'] == 'RPM') _currentRpm = data['value'];
         if (data['type'] == 'SPEED') _currentSpeed = data['value'];
         if (data['type'] == 'LOAD') _engineLoad = data['value'];
@@ -379,6 +477,72 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       }
     });
+  }
+
+  // ---> 2. THE ML POPUP UI <---
+  void _showAIWarningPopup(String diagnosis, int score) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: Colors.red[900],
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.memory, color: Colors.white, size: 30),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'AI PREDICTIVE ALERT',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.black45,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                'Engine Health Score Drop: $score/100',
+                style: const TextStyle(
+                  color: Colors.orangeAccent,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              diagnosis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                height: 1.5,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.white),
+            onPressed: () => Navigator.pop(context),
+            child: const Text(
+              'ACKNOWLEDGE',
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _requestPermissions() async {
@@ -503,9 +667,13 @@ class _HomeScreenState extends State<HomeScreen> {
         setState(() => _isConnected = true);
         _startPollingData();
         _startDatabaseLogging();
+
+        // ---> 3. ML TRIGGER FOR DEMO MODE <---
+        _obdService.startMLAnalysisEngine();
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Demo Mode Started'),
+            content: Text('Demo Mode Started - AI Active'),
             backgroundColor: Colors.amber,
           ),
         );
@@ -521,7 +689,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  // Shows the actual BT/Wifi Connection UI
   void _showConnectionManager() {
     if (_activeVehicle == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -549,7 +716,17 @@ class _HomeScreenState extends State<HomeScreen> {
           });
           _startPollingData();
           _startDatabaseLogging();
+
+          // ---> 4. ML TRIGGER FOR HARDWARE CONNECTION <---
+          _obdService.startMLAnalysisEngine();
+
           Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Hardware Connected - AI Active'),
+              backgroundColor: Colors.green,
+            ),
+          );
         },
       ),
     );
@@ -595,10 +772,11 @@ class _HomeScreenState extends State<HomeScreen> {
               _isPollingData = false;
               _obdService.disconnect();
               await supabase.auth.signOut();
-              if (mounted)
+              if (mounted) {
                 Navigator.of(context).pushReplacement(
                   MaterialPageRoute(builder: (context) => const AuthScreen()),
                 );
+              }
             },
           ),
         ],
@@ -740,7 +918,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     );
                   },
                 ),
-
                 _buildMenuCard(
                   title: "AI Mechanic",
                   icon: Icons.smart_toy,
@@ -796,13 +973,24 @@ class _HomeScreenState extends State<HomeScreen> {
                       );
                       return;
                     }
-
                     Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (context) => MaintenanceScreen(
                           activeVehicle: _activeVehicle!,
                           currentOdometer: _currentDistance,
                         ),
+                      ),
+                    );
+                  },
+                ),
+                _buildMenuCard(
+                  title: "Mechanic Portal",
+                  icon: Icons.engineering,
+                  color: Colors.indigoAccent,
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => const MechanicPortalScreen(),
                       ),
                     );
                   },
@@ -1356,8 +1544,7 @@ class _ConnectionManagerSheetState extends State<ConnectionManagerSheet> {
 }
 
 // ==========================================
-// 6. AI MECHANIC CHAT SCREEN
-// ==========================================
+//6 AI MECHANIC SCREEN
 class AiMechanicScreen extends StatefulWidget {
   final Map<String, dynamic>? activeVehicle;
 
@@ -1373,22 +1560,91 @@ class _AiMechanicScreenState extends State<AiMechanicScreen> {
   final List<Map<String, String>> _messages = [];
   bool _isTyping = false;
 
+  // Voice Engine Variables
+  late stt.SpeechToText _speech;
+  bool _isListening = false;
+  late FlutterTts _flutterTts;
+  bool _isSpeaking = false;
+
   @override
   void initState() {
     super.initState();
+    _initializeVoiceEngines();
+
     String carName = widget.activeVehicle != null
         ? "${widget.activeVehicle!['year']} ${widget.activeVehicle!['make']}"
         : "your vehicle";
 
-    _messages.add({
-      'role': 'ai',
-      'text':
-          "Hello! I am your AI Mechanic. How can I help you with $carName today?\n\n(میں آپ کا اے آئی مکینک ہوں۔ میں آج آپ کی گاڑی کے ساتھ کیا مدد کر سکتا ہوں؟)",
+    _addMessage(
+      'ai',
+      "Hello! I am your AI Mechanic. How can I help you with $carName today?\n\n(میں آپ کا اے آئی مکینک ہوں۔ میں آج آپ کی گاڑی کے ساتھ کیا مدد کر سکتا ہوں؟)",
+    );
+  }
+
+  // --- 1. VOICE ENGINE SETUP ---
+  void _initializeVoiceEngines() async {
+    _speech = stt.SpeechToText();
+    _flutterTts = FlutterTts();
+
+    // Configure the TTS Voice
+    await _flutterTts.setLanguage("ur-PK");
+    await _flutterTts.setSpeechRate(
+      0.5,
+    ); // Slightly slower, clear mechanic voice
+    await _flutterTts.setVolume(1.0);
+    await _flutterTts.setPitch(1.0);
+
+    _flutterTts.setStartHandler(() => setState(() => _isSpeaking = true));
+    _flutterTts.setCompletionHandler(() => setState(() => _isSpeaking = false));
+    _flutterTts.setErrorHandler((msg) => setState(() => _isSpeaking = false));
+  }
+
+  // --- 2. SPEECH TO TEXT LOGIC ---
+  void _listen() async {
+    if (!_isListening) {
+      bool available = await _speech.initialize(
+        onStatus: (val) => print('onStatus: $val'),
+        onError: (val) => print('onError: $val'),
+      );
+      if (available) {
+        setState(() => _isListening = true);
+        // Stop any current AI speech so it can hear you
+        if (_isSpeaking) _flutterTts.stop();
+
+        _speech.listen(
+          onResult: (val) => setState(() {
+            _chatController.text = val.recognizedWords;
+          }),
+        );
+      }
+    } else {
+      setState(() => _isListening = false);
+      _speech.stop();
+      // Automatically send the message when you stop talking
+      if (_chatController.text.isNotEmpty) {
+        _sendMessage(_chatController.text);
+      }
+    }
+  }
+
+  // Helper to add messages and read AI responses aloud
+  void _addMessage(String role, String text) {
+    setState(() {
+      _messages.add({'role': role, 'text': text});
     });
+    _scrollToBottom();
+
+    // If the AI is responding, read it out loud!
+    if (role == 'ai') {
+      _flutterTts.speak(text);
+    }
   }
 
   Future<void> _sendMessage(String text) async {
     if (text.trim().isEmpty) return;
+
+    // Stop speaking if user interrupts
+    if (_isSpeaking) await _flutterTts.stop();
 
     setState(() {
       _messages.add({'role': 'user', 'text': text});
@@ -1403,8 +1659,10 @@ class _AiMechanicScreenState extends State<AiMechanicScreen> {
         : "No specific vehicle selected.";
 
     try {
-      // REPLACE with your FastAPI server's actual IP address!
-      final url = Uri.parse('http://192.168.100.25:8000/chat');
+      // final url = Uri.parse('http://192.168.100.23:8000/chat');  home network
+      // final url = Uri.parse('http://192.168.120.166/chat'); // Updated IP from your earlier message (mobile hotspot)
+      final url = Uri.parse('https://ai-mechanic-backend.onrender.com/chat');
+
 
       final response = await http.post(
         url,
@@ -1414,37 +1672,20 @@ class _AiMechanicScreenState extends State<AiMechanicScreen> {
 
       if (response.statusCode == 200) {
         final responseData = json.decode(response.body);
-        setState(() {
-          _isTyping = false;
-          _messages.add({
-            'role': 'ai',
-            'text':
-                responseData['response'] ??
-                "I received a response, but couldn't read the text.",
-          });
-        });
+        setState(() => _isTyping = false);
+        _addMessage(
+          'ai',
+          responseData['response'] ??
+              "I received a response, but couldn't read the text.",
+        );
       } else {
-        setState(() {
-          _isTyping = false;
-          _messages.add({
-            'role': 'ai',
-            'text':
-                "Server Error: ${response.statusCode}. Make sure the Python backend is running!",
-          });
-        });
+        setState(() => _isTyping = false);
+        _addMessage('ai', "Server Error: ${response.statusCode}.");
       }
     } catch (e) {
-      setState(() {
-        _isTyping = false;
-        _messages.add({
-          'role': 'ai',
-          'text':
-              "Network Error: Could not connect to the backend. Is your FastAPI server running? ($e)",
-        });
-      });
+      setState(() => _isTyping = false);
+      _addMessage('ai', "Network Error: Could not connect to the backend.");
     }
-
-    _scrollToBottom();
   }
 
   void _scrollToBottom() {
@@ -1460,21 +1701,36 @@ class _AiMechanicScreenState extends State<AiMechanicScreen> {
   }
 
   @override
+  void dispose() {
+    _flutterTts.stop(); // Stop audio when leaving screen
+    _speech.stop();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
       appBar: AppBar(
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.smart_toy, color: Colors.purpleAccent),
-            SizedBox(width: 10),
-            Text(
+            const Icon(Icons.smart_toy, color: Colors.purpleAccent),
+            const SizedBox(width: 10),
+            const Text(
               'AI Mechanic',
               style: TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.bold,
               ),
             ),
+            const Spacer(),
+            // Stop Audio Button
+            if (_isSpeaking)
+              IconButton(
+                icon: const Icon(Icons.volume_off, color: Colors.redAccent),
+                onPressed: () => _flutterTts.stop(),
+                tooltip: "Stop Speaking",
+              ),
           ],
         ),
         backgroundColor: Colors.black,
@@ -1537,9 +1793,17 @@ class _AiMechanicScreenState extends State<AiMechanicScreen> {
                   child: TextField(
                     controller: _chatController,
                     style: const TextStyle(color: Colors.white),
+                    onChanged: (val) =>
+                        setState(() {}), // Update UI to switch mic/send icon
                     decoration: InputDecoration(
-                      hintText: "Ask about a noise, code, or issue...",
-                      hintStyle: const TextStyle(color: Colors.white54),
+                      hintText: _isListening
+                          ? "Listening..."
+                          : "Ask about a noise, code...",
+                      hintStyle: TextStyle(
+                        color: _isListening
+                            ? Colors.purpleAccent
+                            : Colors.white54,
+                      ),
                       filled: true,
                       fillColor: Colors.black,
                       border: OutlineInputBorder(
@@ -1555,14 +1819,30 @@ class _AiMechanicScreenState extends State<AiMechanicScreen> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                Container(
-                  decoration: const BoxDecoration(
-                    color: Colors.purpleAccent,
-                    shape: BoxShape.circle,
-                  ),
-                  child: IconButton(
-                    icon: const Icon(Icons.send, color: Colors.white),
-                    onPressed: () => _sendMessage(_chatController.text),
+
+                // Dynamic Send / Mic Button
+                GestureDetector(
+                  onTap: () {
+                    if (_chatController.text.isNotEmpty) {
+                      _sendMessage(_chatController.text);
+                    } else {
+                      _listen();
+                    }
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: _isListening
+                          ? Colors.redAccent
+                          : Colors.purpleAccent,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      _chatController.text.isNotEmpty
+                          ? Icons.send
+                          : (_isListening ? Icons.mic : Icons.mic_none),
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ],
